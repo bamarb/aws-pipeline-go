@@ -1,0 +1,29 @@
+# trapyz geo loc config
+
+version = "1.0"
+# default radius 300 meters 
+radius = "300"
+nworkers = "4"
+
+[db]
+# TOML does not care about tabs/indents
+    [db.mysqldb-prod]
+    server = ""
+    port = "3306"
+    dbname = ""
+    user = ""
+    password = ""
+
+    [db.redis-prod]
+    server = ""
+    port = "6379"
+    dbname = ""
+    user = ""
+    password = ""
+
+[output]
+directory = "./tpz-geo-out"
+file = "geocalc.out"
+logdir  = "./tpz-geo-out"
+logfile = "geocalc-process.log"
+
