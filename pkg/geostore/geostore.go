@@ -1,6 +1,8 @@
 //Package georedis port of node georedis to go lang using radix.v3
 package geostore
 
+import radix "github.com/mediocregopher/radix.v3"
+
 // Order an enum for sort order
 type Order int
 
@@ -41,4 +43,9 @@ type GeoLocationStore interface {
 	DeleteLocations(indexName string, locs ...string) (int64, error)
 	Nearby(indexName string, lat string, lng string, radius string) ([]string, error)
 	Count(indexName string) (int64, error)
+}
+
+// NewGeoLocationStore  ctor
+func NewGeoLocationStore(pool *radix.Pool) GeoLocationStore {
+	return &redisLocationStore{pool}
 }

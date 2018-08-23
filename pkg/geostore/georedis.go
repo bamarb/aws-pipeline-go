@@ -10,7 +10,7 @@ type redisLocationStore struct {
 	p *radix.Pool
 }
 
-func (rs *redisLocationStore) AddLocations(idx string, locs ...string) (int64, error) {
+func (rs *redisLocationStore) AddOrUpdateLocations(idx string, locs ...string) (int64, error) {
 	var ret int64
 	err := rs.p.Do(radix.FlatCmd(&ret, "GEOADD", idx, locs))
 	return ret, err

@@ -4,10 +4,13 @@ version = "1.0"
 # default radius 300 meters 
 radius = "300"
 nworkers = "4"
+tpz_env = "dev"
+#cache type can be "inmem" or "redis"
+cache_type= "redis"
 
 [db]
 # TOML does not care about tabs/indents
-    [db.mysqldb-prod]
+    [db.mysql-prod]
     server = ""
     port = "3306"
     dbname = ""
@@ -21,6 +24,20 @@ nworkers = "4"
     user = ""
     password = ""
 
+    [db.mysql-dev]
+    server = "127.0.0.1"
+    port = "3301"
+    dbname = "trapyz_beta"
+    user = "root"
+    password = "admin"
+
+    [db.redis-dev]
+    server = "127.0.0.1"
+    port = "6379"
+    dbname = ""
+    user = ""
+    password = ""
+  
 [output]
 directory = "./tpz-geo-out"
 file = "geocalc.out"
