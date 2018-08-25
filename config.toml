@@ -3,10 +3,11 @@
 version = "1.0"
 # default radius 300 meters 
 radius = "300"
-nworkers = "4"
+nworkers = 4
 tpz_env = "dev"
 #cache type can be "inmem" or "redis"
 cache_type= "redis"
+inputdir = "/home/bamar/trapyz/scratch/s3-dump"
 
 [db]
 # TOML does not care about tabs/indents

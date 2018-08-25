@@ -37,11 +37,18 @@ type QueryOptions struct {
 	Count         int
 }
 
+//GeoRadiusDistInfo holds radius info with distance
+type GeoRadiusDistInfo struct {
+	LocID    string
+	Distance float64
+}
+
 // GeoLocationStore Wrappers around Geo* Commands
 type GeoLocationStore interface {
 	AddOrUpdateLocations(indexName string, locs ...string) (int64, error)
 	DeleteLocations(indexName string, locs ...string) (int64, error)
-	Nearby(indexName string, lat string, lng string, radius string) ([]string, error)
+	NearbyWithDist(indexName string, lat string,
+		lng string, radius string) ([]GeoRadiusDistInfo, error)
 	Count(indexName string) (int64, error)
 }
 
