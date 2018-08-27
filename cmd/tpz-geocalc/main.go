@@ -51,7 +51,7 @@ type Config struct {
 	Radius   string
 	Nworkers int
 	Inputdir string
-	TpzEnv   string
+	TpzEnv   string `toml:"tpz_env"`
 	Output   OutputInfo
 	Db       map[string]Database
 }
@@ -435,6 +435,14 @@ func writer(records chan GeoLocOutput, outFile *os.File) {
 	}
 }
 
+func dbKey(cfg *Config, dbtype string) string {
+	defSuffix := "dev"
+	if cfg.TpzEnv != "" {
+		return fmt.Sprintf("%s-%s", dbtype, cfg.TpzEnv)
+	}
+	return fmt.Sprintf("%s-%s", dbtype, defSuffix)
+}
+
 func main() {
 	flag.Parse()
 	var aKeyMap, catMap, subCatMap, cityMap map[string]int
@@ -448,13 +456,15 @@ func main() {
 	configLogging(config.Output)
 
 	//TODO: Pull this from config or ENV
-	dbCfg := config.Db["mysql-dev"]
+	dbCfg := config.Db[dbKey(config, "mysql")]
 	sqlConnStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbCfg.User,
 		dbCfg.Password, dbCfg.Server, dbCfg.Port, dbCfg.Dbname)
 	//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
 	db := sqlx.MustConnect("mysql", sqlConnStr)
 	//TODO: use config
-	redisPool, err := radix.NewPool("tcp", "localhost:6379", 10)
+	redisCfg := config.Db[dbKey(config, "redis")]
+	redisConnStr := fmt.Sprintf("%s:%s", redisCfg.Server, redisCfg.Port)
+	redisPool, err := radix.NewPool("tcp", redisConnStr, 10)
 	if err != nil {
 		log.Fatalln(err)
 	}

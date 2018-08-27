@@ -10,7 +10,6 @@ cache_type= "redis"
 inputdir = "/home/bamar/trapyz/scratch/s3-dump"
 
 [db]
-# TOML does not care about tabs/indents
     [db.mysql-prod]
     server = ""
     port = "3306"
