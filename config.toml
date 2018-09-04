@@ -7,8 +7,6 @@ nworkers = 4
 tpz_env = "dev"
 #cache type can be "inmem" or "redis"
 cache_type= "redis"
-inputdir = "/home/bamar/trapyz/scratch/s3-dump"
-
 [db]
     [db.mysql-prod]
     server = ""
@@ -37,10 +35,28 @@ inputdir = "/home/bamar/trapyz/scratch/s3-dump"
     dbname = ""
     user = ""
     password = ""
-  
+
+#Options for S3 NOTE: Do not store AWS credentials here
+[aws]
+    [aws.s3-prod]
+    profile="trapyz"
+    bucket = "usergeologs"
+    prefixes=[
+        "usergeopointlocation",
+        "userwificonnectedlocation",
+        "userwifiscanlocation",
+        "usergeopixellogs"
+    ]
+    s3dump_prefix = "~/s3dump"
+
+    [aws.s3-dev]
+    profile="trapyz-dev"
+    bucket = "usergeologsb"
+    prefixes=["usergeopixellogs"]
+    s3dump_prefix = "~/s3dump-dev"
+
 [output]
 directory = "./tpz-geo-out"
 file = "geocalc.out"
 logdir  = "./tpz-geo-out"
 logfile = "geocalc-process.log"
-
