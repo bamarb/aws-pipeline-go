@@ -39,6 +39,7 @@ cache_type= "redis"
 #Options for S3 NOTE: Do not store AWS credentials here
 [aws]
     [aws.s3-prod]
+    region="us-east-1"
     profile="trapyz"
     bucket = "usergeologs"
     prefixes=[
@@ -47,13 +48,27 @@ cache_type= "redis"
         "userwifiscanlocation",
         "usergeopixellogs"
     ]
-    s3dump_prefix = "~/s3dump"
+    #date from and To are optional DateFrom defaults to yesterday Midnight
+    #date To defaults to today. Dates have to be in YYYY/MM/DD/[HH] format
+    #HH stands for hour of the day, valid values are from 00-23, HH is optional 
+    date_from=""
+    date_to=""
+    #Directory prefix, suffix will be tpz env [eg:s3dump-prod] 
+    s3dump_prefix = "./s3dump"
+    flatten = true
+    unzip = true
 
     [aws.s3-dev]
-    profile="trapyz-dev"
-    bucket = "usergeologsb"
+    region="us-east-1"
+    profile="bobble"
+    bucket = "usergeologs"
     prefixes=["usergeopixellogs"]
-    s3dump_prefix = "~/s3dump-dev"
+    #Directory prefix, suffix will be tpz env  [eg: s3dump-dev]
+    date_from= "2018/09/06/01"
+    date_to=   "2018/09/06/02"
+    s3dump_prefix = "./s3dump"
+    flatten = true
+    unzip = true
 
 [output]
 directory = "./tpz-geo-out"

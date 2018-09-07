@@ -1,28 +1,22 @@
 package file
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"mime"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-//S3Filesystem type abstracts the buckets, prefixes and keys
-type S3Filesystem struct {
-	err    error
-	conn   s3iface.S3API
-	bucket string
-	path   string
-}
-
-//S3File type heps dealing with S3Files
+//S3File type helps dealing with S3Files
 type S3File struct {
 	conn   s3iface.S3API
 	bucket string
@@ -31,7 +25,13 @@ type S3File struct {
 	md5    []byte
 }
 
-//Relative returns the s3 file path
+//NewS3File an S3File constructor
+func NewS3File(conn s3iface.S3API, bucket string, obj *s3.Object) *S3File {
+	_, f := path.Split(*obj.Key)
+	return &S3File{conn, bucket, obj, f, nil}
+}
+
+//Relative returns the s3 file name
 func (s3f *S3File) Relative() string {
 	return s3f.path
 }
@@ -69,6 +69,26 @@ func (s3f *S3File) Reader() (io.ReadCloser, error) {
 	return output.Body, err
 }
 
+//Download  the object should auto decompress .gz files
+func (s3f *S3File) Download(ctx context.Context, destDir string) error {
+	destFile := path.Join(destDir, stripFileExtension(s3f.Relative()))
+	writer, err := os.Create(destFile)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+	//This should decompress the gzip file
+	result, err := s3f.conn.GetObjectWithContext(ctx,
+		&s3.GetObjectInput{Bucket: aws.String(s3f.bucket), Key: s3f.object.Key},
+	)
+	if err != nil {
+		return err
+	}
+	defer result.Body.Close()
+	_, err = io.Copy(writer, result.Body)
+	return err
+}
+
 //Delete deletes and s3 file
 func (s3f *S3File) Delete() error {
 	input := s3.DeleteObjectInput{
@@ -83,44 +103,6 @@ func (s3f *S3File) String() string {
 	return fmt.Sprintf("s3://%s/%s", s3f.bucket, *s3f.object.Key)
 }
 
-func (s3fs *S3Filesystem) Error() error {
-	return s3fs.err
-}
-
-//Files returns  a channel which can be read to enumerate all files in a path
-func (s3fs *S3Filesystem) Files() <-chan File {
-	ch := make(chan File, 1000)
-	stripLen := strings.LastIndex(s3fs.path, "/") + 1
-	if stripLen == -1 {
-		stripLen = 0
-	}
-	go func() {
-		defer close(ch)
-		truncated := true
-		marker := ""
-		for truncated {
-			input := s3.ListObjectsInput{
-				Bucket: aws.String(s3fs.bucket),
-				Prefix: aws.String(s3fs.path),
-				Marker: aws.String(marker),
-			}
-			output, err := s3fs.conn.ListObjects(&input)
-			if err != nil {
-				s3fs.err = err
-				return
-			}
-			for _, c := range output.Contents {
-				key := c
-				relpath := (*key.Key)[stripLen:]
-				ch <- &S3File{s3fs.conn, s3fs.bucket, key, relpath, nil}
-				marker = *c.Key
-			}
-			truncated = *output.IsTruncated
-		}
-	}()
-	return ch
-}
-
 func guessMimeType(filename string) string {
 	ext := mime.TypeByExtension(filepath.Ext(filename))
 	if ext == "" {
@@ -129,59 +111,7 @@ func guessMimeType(filename string) string {
 	return ext
 }
 
-//Create creates an s3 file object
-func (s3fs *S3Filesystem) Create(src File, acl string) error {
-	var fullpath string
-	if s3fs.path == "" || strings.HasSuffix(s3fs.path, "/") {
-		fullpath = filepath.Join(s3fs.path, src.Relative())
-	} else {
-		fullpath = s3fs.path
-	}
-	input := s3manager.UploadInput{
-		ACL:    aws.String(acl),
-		Bucket: aws.String(s3fs.bucket),
-		Key:    aws.String(fullpath),
-	}
-
-	switch t := src.(type) {
-	case *S3File:
-		// special case for S3File to preserve header information
-		getObjectInput := s3.GetObjectInput{
-			Bucket: aws.String(t.bucket),
-			Key:    t.object.Key,
-		}
-		output, err := s3fs.conn.GetObject(&getObjectInput)
-		if err != nil {
-			return err
-		}
-		defer output.Body.Close()
-		input.Body = output.Body
-		// transfer existing headers across
-		input.ContentType = output.ContentType
-		// input.LastModified = output.LastModified
-		input.StorageClass = output.StorageClass
-	default:
-		reader, err := src.Reader()
-		if err != nil {
-			return err
-		}
-		input.Body = reader
-		defer reader.Close()
-		input.ContentType = aws.String(guessMimeType(src.Relative()))
-	}
-
-	u := s3manager.NewUploaderWithClient(s3fs.conn)
-	_, err := u.Upload(&input)
-	return err
-}
-
-//Delete deletes and s3 file object
-func (s3fs *S3Filesystem) Delete(path string) error {
-	fullpath := filepath.Join(s3fs.path, path)
-	input := s3.DeleteObjectInput{
-		Bucket: aws.String(s3fs.bucket),
-		Key:    aws.String(fullpath),
-	}
-	_, err := s3fs.conn.DeleteObject(&input)
-	return err
+func stripFileExtension(filename string) string {
+	var extension = path.Ext(filename)
+	return filename[:len(filename)-len(extension)]
 }

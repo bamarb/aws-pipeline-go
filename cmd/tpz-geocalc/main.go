@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -23,34 +24,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Database struct to hold db conn info
-type Database struct {
-	Server   string
-	Port     string
-	Dbname   string
-	User     string
-	Password string
-}
-
-// OutputInfo struct to write output files and logs
-type OutputInfo struct {
-	Directory string
-	File      string
-	Logdir    string
-	Logfile   string
-}
-
-// Config config struct decoded from toml
-type Config struct {
-	Version  string
-	Radius   string
-	Nworkers int
-	Inputdir string
-	TpzEnv   string `toml:"tpz_env"`
-	Output   OutputInfo
-	Db       map[string]Database
-}
-
 // GeoLocCalcTask calculates the Geolocation for a bunch of files
 // Each file has a bunch of json user data. Once the location is
 // filled (GeoLocOutput) in, sends the output to LogWriter for processing
@@ -62,7 +35,7 @@ type GeoLocCalcTask struct {
 	//Send Out copies of GeoLocOutput to LogWriter
 	Outchan chan trapyz.GeoLocOutput
 	//A pointer to the config
-	Cfg *Config
+	Cfg *trapyz.Config
 	//The cache for lookups
 	Cache *trapyz.Cache
 	//Signal worker is done
@@ -212,14 +185,14 @@ var (
 	startTime  = time.Now()
 	workerPool *task.Pool
 	redisPool  *radix.Pool
-	config     *Config
+	config     *trapyz.Config
 )
 
 func init() {
 	flag.StringVar(&cfgFile, "f", "config.toml", "# Path to cfg file (.toml)")
 }
 
-func configLogging(logCfg OutputInfo) {
+func configLogging(logCfg trapyz.OutputInfo) {
 	if err := os.MkdirAll(logCfg.Logdir, 0755); err != nil {
 		fmt.Printf("Error creating log directory: %s", err)
 		os.Exit(2)
@@ -249,31 +222,21 @@ func writer(records chan trapyz.GeoLocOutput, outFile *os.File) {
 	}
 }
 
-func dbKey(cfg *Config, dbtype string) string {
-	defSuffix := "dev"
-	if cfg.TpzEnv != "" {
-		return fmt.Sprintf("%s-%s", dbtype, cfg.TpzEnv)
-	}
-	return fmt.Sprintf("%s-%s", dbtype, defSuffix)
-}
-
 func main() {
 	flag.Parse()
-
+	ctx := context.Background()
 	if _, err := toml.DecodeFile(cfgFile, &config); err != nil {
 		fmt.Printf("FATAL error parsing cfg file : %s ", err)
 		os.Exit(1)
 	}
 	configLogging(config.Output)
 
-	//TODO: Pull this from config or ENV
-	dbCfg := config.Db[dbKey(config, "mysql")]
+	dbCfg := config.Db[trapyz.CfgKey(config, "mysql")]
 	sqlConnStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbCfg.User,
 		dbCfg.Password, dbCfg.Server, dbCfg.Port, dbCfg.Dbname)
 	//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
 	db := sqlx.MustConnect("mysql", sqlConnStr)
-	//TODO: use config
-	redisCfg := config.Db[dbKey(config, "redis")]
+	redisCfg := config.Db[trapyz.CfgKey(config, "redis")]
 	redisConnStr := fmt.Sprintf("%s:%s", redisCfg.Server, redisCfg.Port)
 	redisPool, err := radix.NewPool("tcp", redisConnStr, 10)
 	if err != nil {
@@ -288,6 +251,13 @@ func main() {
 		log.Fatalln(err)
 	}
 	/* Download S3 Files */
+	s3pool := task.New(4)
+	s3pool.Start()
+	s3wg, err := trapyz.S3Fetch(ctx, config, s3pool)
+	if err != nil {
+		log.Fatalf("ERROR starting S3 Fetcher:%s", err)
+	}
+	s3wg.Wait()
 
 	/* Start The Log Writer */
 	ofile := path.Join(config.Output.Directory, config.Output.File)
@@ -300,12 +270,13 @@ func main() {
 	outchan := make(chan trapyz.GeoLocOutput)
 	go writer(outchan, outPutFile)
 	/* Start the workers and wait for them to finish */
-	filesToProcess, err := ioutil.ReadDir(config.Inputdir)
+	inputDir := trapyz.FindAndCreateDestDir(config)
+	filesToProcess, err := ioutil.ReadDir(inputDir)
 	if err != nil {
-		log.Fatalf("Unable to read dir [%s]: %s", config.Inputdir, err)
+		log.Fatalf("Unable to read dir [%s]: %s", inputDir, err)
 	}
 	/* Create and start the pool */
-	var nw = 1
+	var nw = 4
 	var wg sync.WaitGroup
 
 	if config.Nworkers > 0 {

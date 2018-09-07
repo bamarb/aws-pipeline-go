@@ -1,6 +1,9 @@
 package file
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 //File interface for working with both s3 and local files
 type File interface {
@@ -11,12 +14,5 @@ type File interface {
 	Delete() error
 	String() string
 	IsDirectory() bool
-}
-
-//Filesystem is a uniform interface for dealing with both local and s3 files
-type Filesystem interface {
-	Files() <-chan File
-	Create(src File, acl string) error
-	Delete(path string) error
-	Error() error
+	Download(context context.Context, destDir string) error
 }
