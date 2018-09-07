@@ -2,13 +2,16 @@ package trapyz
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func TestPrefixChan(t *testing.T) {
 	bctx := context.Background()
 	topPfx1 := []string{"bobble"}
-
+	yesterday := roundToDay(time.Now().AddDate(0, 0, -1))
+	prefixYesterday := fmt.Sprintf("bobble/%s", yesterday.Format(dateFormat))
 	type args struct {
 		ctx         context.Context
 		fromDate    string
@@ -31,11 +34,11 @@ func TestPrefixChan(t *testing.T) {
 		{"Non Neg Test 2", args{bctx, "2018/01/01/23", "2018/01/02/00", topPfx1},
 			[]string{"bobble/2018/01/01/23"}, false},
 
-		{"Non Neg Test 3", args{bctx, "", "", topPfx1},
-			[]string{"bobble/2018/01/01/23"}, false},
-
 		{"Non Neg Test 4", args{bctx, "2018/09/06/00", "2018/09/06/02", topPfx1},
-			[]string{"bobble/2018/01/01/23"}, false},
+			[]string{"bobble/2018/09/06/00", "bobble/2018/09/06/01"}, false},
+
+		{"Non Neg Test 5", args{bctx, "", "", topPfx1},
+			[]string{prefixYesterday}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -271,6 +271,7 @@ func main() {
 	go writer(outchan, outPutFile)
 	/* Start the workers and wait for them to finish */
 	inputDir := trapyz.FindAndCreateDestDir(config)
+	config.Inputdir = inputDir
 	filesToProcess, err := ioutil.ReadDir(inputDir)
 	if err != nil {
 		log.Fatalf("Unable to read dir [%s]: %s", inputDir, err)

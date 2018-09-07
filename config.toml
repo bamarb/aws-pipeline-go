@@ -64,7 +64,7 @@ cache_type= "redis"
     bucket = "usergeologs"
     prefixes=["usergeopixellogs"]
     #Directory prefix, suffix will be tpz env  [eg: s3dump-dev]
-    date_from= "2018/09/06/01"
+    date_from= "2018/09/05/23"
     date_to=   "2018/09/06/02"
     s3dump_prefix = "./s3dump"
     flatten = true

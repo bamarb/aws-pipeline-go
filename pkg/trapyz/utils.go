@@ -67,13 +67,25 @@ func spanDays(fd time.Time, td time.Time) int {
 	return int(td.Sub(fd).Hours() / 24)
 }
 
+func crossesDayBoundary(fd time.Time, td time.Time) bool {
+	return roundToDay(td).Sub(roundToDay(fd)).Hours() > 0
+}
+
 func datePrefixGenerator(fromDate time.Time, toDate time.Time) []string {
 	var prefixes []string
+
+	if !crossesDayBoundary(fromDate, toDate) {
+		for i := fromDate.Hour(); i < toDate.Hour(); i++ {
+			str := fmt.Sprintf("%s/%02d", fromDate.Format(dateFormat), i)
+			prefixes = append(prefixes, str)
+		}
+		return prefixes
+	}
 
 	nd := fromDate.AddDate(0, 0, 1)
 	n := spanDays(roundToDay(nd), roundToDay(toDate))
 
-	if fromDate.Hour() == 0 && n > 0 {
+	if fromDate.Hour() == 0 {
 		prefixes = append(prefixes, fromDate.Format(dateFormat))
 	} else {
 		for i := fromDate.Hour(); i < 24; i++ {
@@ -120,7 +132,7 @@ func ParseDates(fd string, td string) (time.Time, time.Time, error) {
 		start = res
 	}
 	if td == "" {
-		end = roundToHour(time.Now())
+		end = roundToDay(time.Now())
 	} else {
 		res, err := ParseDate(td)
 		if nil != err {
