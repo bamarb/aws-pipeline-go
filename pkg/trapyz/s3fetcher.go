@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/bamarb/aws-pipeline-go/pkg/file"
@@ -17,50 +16,26 @@ import (
 //ErrorNoBucket is thrown when bucket cannot be found in config
 var ErrorNoBucket = errors.New("Error no aws bucket")
 
-//S3Fetch starts a s3 fetcher
-func S3Fetch(ctx context.Context, cfg *Config, taskPool *task.Pool) (*sync.WaitGroup, error) {
+//S3FetchOnTimeRange starts a s3 fetcher
+func S3FetchOnTimeRange(ctx context.Context, cfg *Config, taskPool *task.Pool) *sync.WaitGroup {
 	var wg sync.WaitGroup
-	var profile, region string
 	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
-	if awsCfgInfo.Bucket == "" {
-		return nil, ErrorNoBucket
-	}
-	if awsCfgInfo.Profile == "" {
-		profile = "default"
-	} else {
-		profile = awsCfgInfo.Profile
-	}
-	if awsCfgInfo.Region == "" {
-		region = "us-east-1"
-	} else {
-		region = awsCfgInfo.Region
-	}
-	//Parse The dates and get the channel
-	prefixChan, err := PrefixChan(ctx, awsCfgInfo.DateFrom,
-		awsCfgInfo.DateTo, awsCfgInfo.Prefixes)
-
+	conMgr := NewConnMgr(cfg)
+	start, end, err := ParseDates(awsCfgInfo.DateFrom, awsCfgInfo.DateTo)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
+	//Parse The dates and get the channel of prefixes
+	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
 	//Get the Dump Prefix
 	dumpDir := FindAndCreateDestDir(cfg)
-	//construct a session with the specified profile or die
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Config:  aws.Config{Region: aws.String(region)},
-		Profile: profile,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	s3c := s3.New(sess)
+	s3c := conMgr.MustConnectS3()
 	for i := 0; i < cfg.Nworkers; i++ {
 		task := &S3FetcherTask{ctx, s3c, awsCfgInfo.Bucket, prefixChan, dumpDir, true, &wg}
 		taskPool.Submit(task)
 		wg.Add(1)
 	}
-
-	return &wg, nil
+	return &wg
 }
 
 //S3FetcherTask is a task that downloads  S3 objects

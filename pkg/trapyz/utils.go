@@ -147,12 +147,7 @@ func ParseDates(fd string, td string) (time.Time, time.Time, error) {
 }
 
 //PrefixChan provides a channel of prefixes so that multiple go routines can consume a prefix in parallel
-func PrefixChan(ctx context.Context, fromDate string, toDate string, topPrefixes []string) (<-chan string, error) {
-	start, end, err := ParseDates(fromDate, toDate)
-	if err != nil {
-		return nil, err
-	}
-
+func PrefixChan(ctx context.Context, start time.Time, end time.Time, topPrefixes []string) <-chan string {
 	datePrefixes := datePrefixGenerator(start, end)
 	var n = len(topPrefixes) * len(datePrefixes)
 	allPrefixes := make([]string, 0, n)
@@ -177,5 +172,5 @@ func PrefixChan(ctx context.Context, fromDate string, toDate string, topPrefixes
 			}
 		}
 	}()
-	return out, nil
+	return out
 }
