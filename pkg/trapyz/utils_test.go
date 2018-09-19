@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+
 func TestPrefixChan(t *testing.T) {
 	bctx := context.Background()
 	topPfx1 := []string{"bobble"}
@@ -25,7 +26,7 @@ func TestPrefixChan(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
-		{"Non Neg Test 0", args{bctx, "2018/01/01", "2018/01/02", topPfx1},
+		{"Non Neg Test 0", args{bctx, ParseDate("2018/01/01", "2018/01/02", topPfx1},
 			[]string{"bobble/2018/01/01"}, false},
 
 		{"Non Neg Test 1", args{bctx, "2018/01/01/23", "2018/01/02/01", topPfx1},
@@ -42,7 +43,7 @@ func TestPrefixChan(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := PrefixChan(tt.args.ctx, tt.args.fromDate, tt.args.toDate, tt.args.topPrefixes)
+			got := PrefixChan(tt.args.ctx, tt.args.fromDate, tt.args.toDate, tt.args.topPrefixes)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("PrefixChan() error = %v, wantErr %v", err, tt.wantErr)
 				return

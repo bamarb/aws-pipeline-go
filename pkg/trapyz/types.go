@@ -24,6 +24,15 @@ type Database struct {
 	Dbname   string
 	User     string
 	Password string
+	Tables   DbTableName
+}
+
+//DbTableName holds table names to query
+type DbTableName struct {
+	MasterRecTable string `toml:"master_rec_table"`
+	StoreUUIDTable string `toml:"store_uuid_table"`
+	PincodeTable   string `toml:"pincode_table"`
+	CityTable      string `toml:"city_table"`
 }
 
 // OutputInfo struct to write output files and logs
@@ -53,6 +62,7 @@ type Config struct {
 	Radius   string
 	Nworkers int
 	Inputdir string
+	Schedule string
 	TpzEnv   string `toml:"tpz_env"`
 	Output   OutputInfo
 	Db       map[string]Database

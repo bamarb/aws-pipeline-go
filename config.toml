@@ -19,6 +19,12 @@ schedule = "hourly"
     dbname = ""
     user = ""
     password = ""
+    #Table names valid keys master_rec_table, store_uuid_table, pincode_table
+    [db.mysql-prod.tables]
+    master_rec_table="MasterRecordSet"
+    store_uuid_table="StoreUuidMap"
+    pincode_table="Pincode"
+    city_table="CityMap"
 
     [db.redis-prod]
     server = ""
@@ -33,6 +39,11 @@ schedule = "hourly"
     dbname = "trapyz_beta"
     user = "root"
     password = "admin"
+    [db.mysql-dev.tables]
+    master_rec_table="MasterRecordSet"
+    store_uuid_table="StoreUuidMap"
+    pincode_table="Pincode"
+    city_table="CityMap"
 
     [db.redis-dev]
     server = "127.0.0.1"

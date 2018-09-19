@@ -2,6 +2,8 @@ package trapyz
 
 import (
 	"strconv"
+	"strings"
+	"text/template"
 
 	"github.com/bamarb/aws-pipeline-go/pkg/geostore"
 	"github.com/jmoiron/sqlx"
@@ -23,31 +25,51 @@ type Cache struct {
 }
 
 //MakeCache a utility function that populates the cache
-func MakeCache(db *sqlx.DB, redisPool *radix.Pool) (*Cache, error) {
+func MakeCache(db *sqlx.DB, redisPool *radix.Pool, cfg *Config) (*Cache, error) {
 	log.Debugln("Populating redis geo cache")
-	err := populateRedisGeoData(db, redisPool)
+	/* Get the Table Names from config */
+	dbTabName := cfg.Db[CfgKey(cfg, "mysql")].Tables
+	err := populateRedisGeoData(db, redisPool, dbTabName)
 	if nil != err {
 		return nil, err
 	}
+
 	/* Populate Caches */
 	aKeyMap := mkAPIKeyMap(db)
 	catMap := mkCategoryMap(db)
 	subCatMap := mkSubCategoryMap(db)
 	cityMap := mkCityMap(db)
 	pinMap := mkPincodeMap(db)
-	locCache := mkLocCache(db, catMap, subCatMap, cityMap, pinMap)
+	locCache := mkLocCache(db, catMap, subCatMap, cityMap, pinMap, dbTabName)
 	log.Debugf("Geo Location cache populated with %d keys", len(locCache))
 	return &Cache{aKeyMap, catMap, subCatMap, cityMap, pinMap, locCache}, nil
 }
 
+func mkGeoStoreQuery(qp DbTableName) (string, error) {
+	//queryParams
+	queryTemplate := `SELECT {{.StoreUUIDTable}}.Store_ID, {{.MasterRecTable}}.lat , {{.MasterRecTable}}.lng 
+	 FROM {{.StoreUUIDTable}} INNER JOIN {{.MasterRecTable}} 
+	 ON {{.StoreUUIDTable}}.Store_Uuid = {{.MasterRecTable}}.UUID ORDER BY {{.StoreUUIDTable}}.Store_ID;`
+	var qstr strings.Builder
+	tmpl, err := template.New("GSQ").Parse(queryTemplate)
+	if err != nil {
+		return "", err
+	}
+	err = tmpl.Execute(&qstr, qp)
+	if err != nil {
+		return "", err
+	}
+	return qstr.String(), nil
+}
+
 // Reads store data from mysql and creates a geo index in redis
 // TODO: Create a Batch Uploader to save RTT
-func populateRedisGeoData(db *sqlx.DB, rp *radix.Pool) error {
-	const redisGeoIndexName = "store:locations"
-	query := `SELECT StoreUuidMap.Store_ID, MasterRecordSet.lat , MasterRecordSet.lng 
-	 FROM StoreUuidMap INNER JOIN MasterRecordSet 
-	 ON StoreUuidMap.Store_Uuid = MasterRecordSet.UUID ORDER BY StoreUuidMap.Store_ID;
-`
+func populateRedisGeoData(db *sqlx.DB, rp *radix.Pool, dbt DbTableName) error {
+	const redisGeoIndexName = RedisGeoIndexName
+	query, err := mkGeoStoreQuery(dbt)
+	if err != nil {
+		return err
+	}
 	rows, err := db.Query(query)
 	if nil != err {
 		return err
@@ -172,13 +194,33 @@ func mkPincodeMap(db *sqlx.DB) map[int]int {
 	return ret
 }
 
+func mkLocCacheQuery(qp DbTableName) (string, error) {
+	//queryParams
+	queryTemplate := `SELECT s.Store_ID AS uuid, m.sname , m.cat , m.subcat, m.city, m.pincode
+	FROM {{.StoreUUIDTable}} s INNER JOIN {{.MasterRecTable}} m ON s.Store_Uuid = m.UUID;`
+	var qstr strings.Builder
+	tmpl, err := template.New("LocCache").Parse(queryTemplate)
+	if err != nil {
+		return "", err
+	}
+	err = tmpl.Execute(&qstr, qp)
+	if err != nil {
+		return "", err
+	}
+	return qstr.String(), nil
+}
+
 func mkLocCache(db *sqlx.DB, catm, scatm, cm map[string]int,
-	pm map[int]int) map[string]GeoLocOutput {
-	q := `SELECT s.Store_ID AS uuid, m.sname , m.cat , m.subcat, m.city, m.pincode
-	  FROM StoreUuidMap s INNER JOIN MasterRecordSet m ON s.Store_Uuid = m.UUID`
+	pm map[int]int, dbt DbTableName) map[string]GeoLocOutput {
+	q, err := mkLocCacheQuery(dbt)
+	if err != nil {
+		log.Errorf("Making query failed: %s", err)
+		return nil
+	}
 	rows, err := db.Queryx(q)
 	if err != nil {
 		log.Errorf("mkLocCache query failed: %s", err)
+		return nil
 	}
 	defer rows.Close()
 	ret := make(map[string]GeoLocOutput, 45000)

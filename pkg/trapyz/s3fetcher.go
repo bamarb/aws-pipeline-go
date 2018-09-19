@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -15,6 +16,34 @@ import (
 
 //ErrorNoBucket is thrown when bucket cannot be found in config
 var ErrorNoBucket = errors.New("Error no aws bucket")
+
+//S3FetchOnSchedule runs on a schedule daily or hourly
+func S3FetchOnSchedule(ctx context.Context, cfg *Config, taskPool *task.Pool) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	var start, end time.Time
+	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
+	conMgr := NewConnMgr(cfg)
+	//Go back to the beginning of this hour
+	schedule := cfg.Schedule
+	if "hourly" == schedule {
+		end = roundToHour(time.Now())
+		start = end.Add(-time.Hour * 1)
+	} else {
+		end = roundToDay(time.Now())
+		start = end.AddDate(0, 0, -1)
+	}
+	//Parse The dates and get the channel of prefixes
+	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
+	//Get the Dump Prefix
+	dumpDir := FindAndCreateDestDir(cfg)
+	s3c := conMgr.MustConnectS3()
+	for i := 0; i < cfg.Nworkers; i++ {
+		task := &S3FetcherTask{ctx, s3c, awsCfgInfo.Bucket, prefixChan, dumpDir, true, &wg}
+		taskPool.Submit(task)
+		wg.Add(1)
+	}
+	return &wg
+}
 
 //S3FetchOnTimeRange starts a s3 fetcher
 func S3FetchOnTimeRange(ctx context.Context, cfg *Config, taskPool *task.Pool) *sync.WaitGroup {

@@ -21,7 +21,7 @@ var ErrorStartAfterEnd = errors.New("Invalid from and to dates from-date is afte
 const dateFormat = "2006/01/02"
 const dateHourFormat = "2006/01/02/15"
 
-var dateRegex = regexp.MustCompile(`^(\d{4})/(\d{2})/(\d{2})?$`)
+var dateRegex = regexp.MustCompile(`^(\d{4})/(\d{2})/(\d{2})$`)
 
 //CfgKey returns a config key depending on the tpz_env config
 //variable in the config file
@@ -53,6 +53,20 @@ func expandTilde(path string) string {
 		return home + path[1:]
 	}
 	return path
+}
+
+func NextTime(schedType string) time.Duration {
+	now := time.Now()
+	if "hourly" == schedType {
+		t := roundToHour(now).Add(time.Hour*1 + time.Minute*15)
+		return t.Sub(now)
+	}
+
+	if "daily" == schedType {
+		t := roundToDay(now).Add(time.Hour*24 + time.Minute*15)
+		return t.Sub(now)
+	}
+	return 0
 }
 
 func roundToHour(t time.Time) time.Time {
