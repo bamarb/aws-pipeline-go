@@ -3,16 +3,29 @@ package trapyz
 import (
 	"context"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 )
 
+func timeFor(dateTime string) time.Time {
+	time, err := ParseDate(dateTime)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return time
+}
 
 func TestPrefixChan(t *testing.T) {
 	bctx := context.Background()
 	topPfx1 := []string{"bobble"}
 	yesterday := roundToDay(time.Now().AddDate(0, 0, -1))
 	prefixYesterday := fmt.Sprintf("bobble/%s", yesterday.Format(dateFormat))
+	dateStart, dateEnd, err := ParseDates("", "")
+	if err != nil {
+		t.Error("ParseDates unexpected error:", err)
+	}
+
 	type args struct {
 		ctx         context.Context
 		fromDate    string
@@ -26,7 +39,7 @@ func TestPrefixChan(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
-		{"Non Neg Test 0", args{bctx, ParseDate("2018/01/01", "2018/01/02", topPfx1},
+		{"Non Neg Test 0", args{bctx, "2018/01/01", "2018/01/02", topPfx1},
 			[]string{"bobble/2018/01/01"}, false},
 
 		{"Non Neg Test 1", args{bctx, "2018/01/01/23", "2018/01/02/01", topPfx1},
@@ -38,18 +51,14 @@ func TestPrefixChan(t *testing.T) {
 		{"Non Neg Test 4", args{bctx, "2018/09/06/00", "2018/09/06/02", topPfx1},
 			[]string{"bobble/2018/09/06/00", "bobble/2018/09/06/01"}, false},
 
-		{"Non Neg Test 5", args{bctx, "", "", topPfx1},
+		{"Non Neg Test 5", args{bctx, dateStart.Format(dateHourFormat), dateEnd.Format(dateHourFormat), topPfx1},
 			[]string{prefixYesterday}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := PrefixChan(tt.args.ctx, tt.args.fromDate, tt.args.toDate, tt.args.topPrefixes)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PrefixChan() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := PrefixChan(tt.args.ctx, timeFor(tt.args.fromDate), timeFor(tt.args.toDate), tt.args.topPrefixes)
 			if nil == got {
-				t.Errorf("PrefixChan() unexpected nil channel but error = %v", err)
+				t.Errorf("PrefixChan() unexpected nil channel")
 				return
 			}
 

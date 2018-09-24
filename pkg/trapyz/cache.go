@@ -46,7 +46,7 @@ func MakeCache(db *sqlx.DB, redisPool *radix.Pool, cfg *Config) (*Cache, error) 
 }
 
 func mkGeoStoreQuery(qp DbTableName) (string, error) {
-	//queryParams
+	//qp (query params, passed to this function) interpolates the text tempalate values
 	queryTemplate := `SELECT {{.StoreUUIDTable}}.Store_ID, {{.MasterRecTable}}.lat , {{.MasterRecTable}}.lng 
 	 FROM {{.StoreUUIDTable}} INNER JOIN {{.MasterRecTable}} 
 	 ON {{.StoreUUIDTable}}.Store_Uuid = {{.MasterRecTable}}.UUID ORDER BY {{.StoreUUIDTable}}.Store_ID;`

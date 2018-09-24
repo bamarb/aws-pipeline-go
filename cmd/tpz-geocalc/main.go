@@ -36,20 +36,22 @@ func init() {
 	flag.StringVar(&toDateHour, "tdh", "", "To date hour in the form YYYY/MM/DD or YYYY/MM/DD/HH")
 }
 
-func configLogging(logCfg trapyz.OutputInfo) {
+func configLogging(logCfg trapyz.OutputInfo) *os.File {
 	if err := os.MkdirAll(logCfg.Logdir, 0755); err != nil {
 		fmt.Printf("Error creating log directory: %s", err)
 		os.Exit(2)
 	}
-	logfile := path.Join(logCfg.Logdir, logCfg.Logfile)
+	logname := logCfg.Logfile + "-" + time.Now().Format("2006-01-02-15-04-05")
+	logfile := path.Join(logCfg.Logdir, logname)
 	f, err := os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
-		fmt.Printf("Error creating log file: %s", err)
+		fmt.Printf("Error creating log file redirecting logs to /dev/null: %s", err)
 		os.Exit(2)
 	}
 	log.SetFormatter(&log.TextFormatter{})
 	log.SetOutput(f)
 	log.SetLevel(log.DebugLevel)
+	return f
 }
 
 func writer(records chan trapyz.GeoLocOutput, outFile *os.File) {
@@ -83,7 +85,7 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	/* Download S3 Files */
 	s3pool := task.New(1)
 	s3pool.Start()
-	trapyz.S3FetchOnTimeRange(ctx, config, s3pool).Wait()
+	trapyz.S3FetchOnSchedule(ctx, config, s3pool).Wait()
 	s3pool.Stop()
 	/* Start The Log Writer */
 	ofile := path.Join(config.Output.Directory, config.Output.File)
@@ -129,13 +131,19 @@ func main() {
 	ctx := context.Background()
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
+	var logFile *os.File
 	for {
 		/* Read the config */
 		if _, err := toml.DecodeFile(cfgFile, &config); err != nil {
 			fmt.Printf("FATAL error parsing cfg file: %s ", err)
 			os.Exit(1)
 		}
-		configLogging(config.Output)
+		if logFile != nil {
+			//Close the previous log file if any
+			logFile.Close()
+		}
+		//Configure a New logfile for this run
+		logFile = configLogging(config.Output)
 		nextDur := trapyz.NextTime(config.Schedule)
 		nextTimer := time.NewTimer(nextDur)
 		log.Infof("Next schedule : %s ", time.Now().Add(nextDur))

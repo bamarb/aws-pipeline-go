@@ -55,6 +55,7 @@ func expandTilde(path string) string {
 	return path
 }
 
+//NextTime returns the remaining duration for the next run
 func NextTime(schedType string) time.Duration {
 	now := time.Now()
 	if "hourly" == schedType {
