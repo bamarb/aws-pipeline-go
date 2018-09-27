@@ -44,3 +44,14 @@ func (rs *redisLocationStore) NearbyWithDist(idx string,
 	}
 	return ret, err
 }
+
+/*
+func (rs *redisLocationStore) MultiNearbyWithDist(reqs []GeoRadiusRequest) ([][]GeoRadiusDistInfo, error) {
+	if len(reqs) == 0 {
+		return nil, nil
+	}
+	ret := make([][]GeoRadiusDistInfo, len(reqs))
+	//Initialze the inner slice
+
+}
+*/

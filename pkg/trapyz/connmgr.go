@@ -29,7 +29,7 @@ func NewConnMgr(config *Config) *ConnectionManager {
 		return nil
 	}
 	once.Do(func() {
-		connectionHolder = &ConnectionManager{cfg: config}
+		connectionHolder = &ConnectionManager{cfg: config, connCache: make(map[string]interface{})}
 	})
 	return connectionHolder
 }

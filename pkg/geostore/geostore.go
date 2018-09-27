@@ -37,6 +37,14 @@ type QueryOptions struct {
 	Count         int
 }
 
+//GeoRadiusRequest type is used to make requests for near by stores
+type GeoRadiusRequest struct {
+	idx    string
+	lat    string
+	lng    string
+	radius string
+}
+
 //GeoRadiusDistInfo holds radius info with distance
 type GeoRadiusDistInfo struct {
 	LocID    string

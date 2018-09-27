@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path"
-	"syscall"
 	"time"
 
 	"github.com/mediocregopher/radix.v3"
@@ -23,13 +21,37 @@ import (
 )
 
 var (
-	cfgFile   string
-	startTime = time.Now()
-	config    *trapyz.Config
+	cfgFile      string
+	fromDateHour string
+	toDateHour   string
+	startTime    = time.Now()
+	config       *trapyz.Config
 )
 
 func init() {
 	flag.StringVar(&cfgFile, "f", "config.toml", "# Path to cfg file (.toml)")
+	flag.StringVar(&fromDateHour, "fdh", "", "From date hour in YYYY/MM/DD or YYYY/MM/DD/HH format")
+	flag.StringVar(&toDateHour, "tdh", "", "To date hour in the form YYYY/MM/DD or YYYY/MM/DD/HH")
+}
+
+func cleanup() {
+	/*
+			rm -rf derive_stdin_stdout_log.log
+		    rm -rf derive_stdin_stdout_log_ddb.log
+		    rm -rf redisgidData/*
+	*/
+	cwd, _ := os.Getwd()
+	fmt.Printf("Cleanup: Current working directory [%s]\n", cwd)
+	os.Remove("derive_stdin_stdout_log.log")
+	os.Remove("derive_stdin_stdout_log_ddb.log")
+	err := os.RemoveAll("redisgidData")
+	if err != nil {
+		fmt.Printf("Error removing Directory: %s\n", err)
+	}
+	err = os.Mkdir("redisgidData", 0755)
+	if err != nil {
+		fmt.Printf("Error creating directory: %s\n", err)
+	}
 }
 
 func configLogging(logCfg trapyz.OutputInfo) *os.File {
@@ -64,14 +86,37 @@ func writer(records chan trapyz.GeoLocOutput, outFile *os.File) {
 	}
 }
 
+func validateAndSetDates(cfg *trapyz.Config) {
+	if _, err := trapyz.ParseDate(fromDateHour); err != nil {
+		fmt.Printf("Error Parsing start date: %s", err)
+		os.Exit(1)
+	}
+
+	if _, err := trapyz.ParseDate(toDateHour); err != nil {
+		fmt.Printf("Error Parsing start date: %s", err)
+		os.Exit(1)
+	}
+	dbKey := trapyz.CfgKey(cfg, "s3")
+	awsCfgInfo := cfg.Aws[dbKey]
+	awsCfgInfo.DateFrom = fromDateHour
+	awsCfgInfo.DateTo = toDateHour
+	cfg.Aws[dbKey] = awsCfgInfo
+}
+
 func runPipeline(ctx context.Context, config *trapyz.Config) {
+	fmt.Printf("%s :Run Pipeline started\n", time.Now())
 	connMgr := trapyz.NewConnMgr(config)
+	var nw = 4
+	if config.Nworkers > 0 {
+		nw = config.Nworkers
+	}
 	//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
 	db := connMgr.MustConnectMysql()
 	redisPool := connMgr.MustConnectRedis()
 	/* Flush All */
 	redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
 	/* Rebuild Cache */
+	fmt.Printf("%s :Populating Redis Cache\n", time.Now())
 	cache, err := trapyz.MakeCache(db, redisPool, config)
 	if err != nil {
 		redisPool.Close()
@@ -81,9 +126,12 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	/* Download S3 Files */
 	s3pool := task.New(1)
 	s3pool.Start()
-	trapyz.S3FetchOnSchedule(ctx, config, s3pool).Wait()
+	dbKey := trapyz.CfgKey(config, "s3")
+	fmt.Printf("%s :Fetching S3 Files from %s to %s\n", time.Now(), config.Aws[dbKey].DateFrom, config.Aws[dbKey].DateTo)
+	trapyz.S3FetchOnTimeRange(ctx, config, s3pool).Wait()
 	s3pool.Stop()
 	/* Start The Log Writer */
+	os.MkdirAll(config.Output.Directory, 0755)
 	ofile := path.Join(config.Output.Directory, config.Output.File)
 	log.Infof("Creating outputfile %s", ofile)
 	outPutFile, err := os.Create(ofile)
@@ -94,62 +142,63 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	outchan := make(chan trapyz.GeoLocOutput)
 	go writer(outchan, outPutFile)
 	/* Start the GeoStore workers and wait for them to finish */
-	var nw = 4
-	if config.Nworkers > 0 {
-		nw = config.Nworkers
-	}
 	workerPool := task.New(nw)
 	workerPool.Start()
+	fmt.Printf("%s :Processing json filling Geo stores data\n", time.Now())
 	trapyz.FillGeoStores(config, cache, redisPool, workerPool, outchan).Wait()
 	close(outchan)
 	workerPool.Stop()
-	/* Exec python3 GenerateDerivedAttributes.py */
-	err = os.Chdir("/home/ubuntu/varunplay")
+	runExtras()
+	log.Infof("Pipeline Execution Completed")
+}
+
+func runExtras() {
+	if curDir, err := os.Getwd(); err == nil {
+		log.Infof("current working directory:[%s]", curDir)
+		defer os.Chdir(curDir)
+	}
+
+	err := os.Chdir("/home/ubuntu/varunplay")
 	if err != nil {
 		log.Errorf("Error chdir: %s ", err)
 		return
 	}
-	cmd := exec.Command("python3", "GenerateDerivedAttributes.py", "testDataDir/")
+	fmt.Println("Changed working dir to :/home/ubuntu/varunplay")
+	cleanup()
+	outDirName := config.Output.Directory + "/"
+	fmt.Println("Executing python3 GenerateDerivedAttributes.py ", outDirName)
+
+	cmd := exec.Command("python3", "GenerateDerivedAttributes.py", outDirName)
 	err = cmd.Run()
 	if err != nil {
 		log.Errorf("Error Executing GenerateDerivedAttributes.py: %s", err)
 	}
 
+	fmt.Println("Executing python3 ElasticSearchAnalytics.py ")
 	cmdEs := exec.Command("python3", "ElasticSearchAnalytics.py")
 	err = cmdEs.Run()
 	if err != nil {
 		log.Errorf("Error executing ElasticSearchAnalytics.py: %s", err)
 	}
+
 }
 
 func main() {
 	flag.Parse()
 	ctx := context.Background()
-	osSignals := make(chan os.Signal, 1)
-	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
 	var logFile *os.File
-	for {
-		/* Read the config */
-		if _, err := toml.DecodeFile(cfgFile, &config); err != nil {
-			fmt.Printf("FATAL error parsing cfg file: %s ", err)
-			os.Exit(1)
-		}
-		if logFile != nil {
-			//Close the previous log file if any
-			logFile.Close()
-		}
-		//Configure a New logfile for this run
-		logFile = configLogging(config.Output)
-		nextDur := trapyz.NextTime(config.Schedule)
-		nextTimer := time.NewTimer(nextDur)
-		log.Infof("Next schedule : %s ", time.Now().Add(nextDur))
-		select {
-		case <-osSignals:
-			log.Infof("Main Shutting down on user signal...")
-			nextTimer.Stop()
-			return
-		case <-nextTimer.C:
-			runPipeline(ctx, config)
-		}
+	/* Read the config */
+	if _, err := toml.DecodeFile(cfgFile, &config); err != nil {
+		fmt.Printf("FATAL error parsing cfg file: %s ", err)
+		os.Exit(1)
 	}
+	validateAndSetDates(config)
+	if logFile != nil {
+		//Close the previous log file if any
+		logFile.Close()
+	}
+	//Configure a New logfile for this run
+	logFile = configLogging(config.Output)
+	runPipeline(ctx, config)
+	logFile.Close()
 }

@@ -19,8 +19,8 @@ import (
 // Each file has a bunch of json user data. Once the location is
 // filled (GeoLocOutput) in, sends the output to LogWriter for processing
 type GeoLocCalcTask struct {
-	//A Slice of File names to process
-	Files []os.FileInfo
+	//A channel providing File names to process
+	Inchan chan string
 	// redis connection pool
 	RedisPool *radix.Pool
 	//Send Out copies of GeoLocOutput to LogWriter
@@ -40,11 +40,10 @@ func (gct GeoLocCalcTask) Task() {
 	defer gct.Wg.Done()
 	store := geostore.NewGeoLocationStore(gct.RedisPool)
 	requiredJSONKeys := []string{"apikey", "gid", "lat", "lng", "createdAt"}
-	log.Infof("GeoLocCalc worker %d started processing %d files", gct.ID, len(gct.Files))
-	for _, file := range gct.Files {
+	for file := range gct.Inchan {
 		var lineCount, errorCount uint
-		absFile := path.Join(gct.Cfg.Inputdir, file.Name())
-		log.Debugf("Worker %d Processing file %s", gct.ID, absFile)
+		absFile := path.Join(gct.Cfg.Inputdir, file)
+		log.Debugf("Worker %d processing file %s", gct.ID, absFile)
 		fh, err := os.OpenFile(path.Join(absFile), os.O_RDONLY, 0644)
 		if err != nil {
 			log.Errorf("Worker %d Error opening data file %s: %s", gct.ID, absFile, err)
@@ -58,13 +57,12 @@ func (gct GeoLocCalcTask) Task() {
 			json.Unmarshal(scanner.Bytes(), &jsonMap)
 			parsedMap, ok := convertJSONMap(jsonMap, requiredJSONKeys)
 			if !ok {
-				log.Errorf("Error Keys Missing:%s", scanner.Text())
+				//log.Errorf("Error Keys Missing:%s", scanner.Text())
 				errorCount++
 				continue
 			}
 			if !gct.InputValid(parsedMap) {
-				log.Errorf("Error NULL/invalid values:%s", scanner.Text())
-				fh.Close()
+				//log.Errorf("Error NULL/invalid values:%s", scanner.Text())
 				errorCount++
 				continue
 			}
@@ -73,10 +71,9 @@ func (gct GeoLocCalcTask) Task() {
 				errorCount++
 			}
 			lineCount++
-
 		}
 		fh.Close()
-		log.Infof("Worker %d processed file:%s records:%d errors:%d", gct.ID, file.Name(), lineCount, errorCount)
+		log.Infof("Worker %d processed file:%s records:%d errors:%d", gct.ID, file, lineCount, errorCount)
 	}
 }
 
@@ -172,48 +169,39 @@ func (gct GeoLocCalcTask) OutputToWriter(vars map[string]string, store geostore.
 }
 
 //FillGeoStores fills nearby stores based on Lat,Long data
-func FillGeoStores(config *Config, cache *Cache,
-	redisPool *radix.Pool,
-	taskPool *task.Pool,
-	outchan chan GeoLocOutput) *sync.WaitGroup {
+func FillGeoStores(config *Config, cache *Cache, redisPool *radix.Pool,
+	taskPool *task.Pool, outchan chan GeoLocOutput) *sync.WaitGroup {
+	var wg sync.WaitGroup
 	inputDir := FindAndCreateDestDir(config)
 	config.Inputdir = inputDir
 	filesToProcess, err := ioutil.ReadDir(inputDir)
 	if err != nil {
 		log.Fatalf("Unable to read dir [%s]: %s", inputDir, err)
 	}
+	if len(filesToProcess) == 0 {
+		return &wg
+	}
+	inChan := make(chan string)
 	var nw = 4
-	var wg sync.WaitGroup
-
 	if config.Nworkers > 0 {
 		nw = config.Nworkers
 	}
-
-	var offset = len(filesToProcess) / nw
-	var base = 0
+	go func() {
+		for _, file := range filesToProcess {
+			inChan <- file.Name()
+		}
+		close(inChan)
+	}()
 	wg.Add(nw)
 	for i := 0; i < nw; i++ {
-		//Create the Task Objects and submit them to the pool
-		if i == nw-1 {
-			taskPool.Submit(GeoLocCalcTask{Files: filesToProcess[base:],
-				Outchan:   outchan,
-				Cache:     cache,
-				ID:        i,
-				RedisPool: redisPool,
-				Wg:        &wg,
-				Cfg:       config,
-			})
-		} else {
-			taskPool.Submit(GeoLocCalcTask{Files: filesToProcess[base : base+offset],
-				Outchan:   outchan,
-				Cache:     cache,
-				ID:        i,
-				RedisPool: redisPool,
-				Wg:        &wg,
-				Cfg:       config,
-			})
-		}
-		base = base + offset
+		taskPool.Submit(GeoLocCalcTask{Inchan: inChan,
+			Outchan:   outchan,
+			Cache:     cache,
+			ID:        i,
+			RedisPool: redisPool,
+			Wg:        &wg,
+			Cfg:       config,
+		})
 	}
 	return &wg
 }

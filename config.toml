@@ -32,6 +32,12 @@ schedule = "hourly"
     dbname = ""
     user = ""
     password = ""
+    [db.redis-local-prod]
+    server = "127.0.0.1"
+    port = "6379"
+    dbname = ""
+    user = ""
+    password = ""
 
     [db.mysql-dev]
     server = "127.0.0.1"

@@ -59,10 +59,10 @@ func S3FetchOnTimeRange(ctx context.Context, cfg *Config, taskPool *task.Pool) *
 	//Get the Dump Prefix
 	dumpDir := FindAndCreateDestDir(cfg)
 	s3c := conMgr.MustConnectS3()
-	for i := 0; i < cfg.Nworkers; i++ {
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
 		task := &S3FetcherTask{ctx, s3c, awsCfgInfo.Bucket, prefixChan, dumpDir, true, &wg}
 		taskPool.Submit(task)
-		wg.Add(1)
 	}
 	return &wg
 }
