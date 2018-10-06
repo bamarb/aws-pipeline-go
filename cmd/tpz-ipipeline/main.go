@@ -26,12 +26,14 @@ var (
 	toDateHour   string
 	startTime    = time.Now()
 	config       *trapyz.Config
+	skipS3       bool
 )
 
 func init() {
 	flag.StringVar(&cfgFile, "f", "config.toml", "# Path to cfg file (.toml)")
 	flag.StringVar(&fromDateHour, "fdh", "", "From date hour in YYYY/MM/DD or YYYY/MM/DD/HH format")
 	flag.StringVar(&toDateHour, "tdh", "", "To date hour in the form YYYY/MM/DD or YYYY/MM/DD/HH")
+	flag.BoolVar(&skipS3, "s", false, "Skip make cache and s3 download steps")
 }
 
 func cleanup() {
@@ -41,10 +43,19 @@ func cleanup() {
 		    rm -rf redisgidData/*
 	*/
 	cwd, _ := os.Getwd()
+	key := trapyz.CfgKey(config, "redis-local")
+	redisCfg := config.Db[key]
+	redisConnStr := fmt.Sprintf("%s:%s", redisCfg.Server, redisCfg.Port)
+	redisPool, err := radix.NewPool("tcp", redisConnStr, 1)
+	if err == nil {
+		fmt.Printf("FLUSHING local redis")
+		redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
+		redisPool.Close()
+	}
 	fmt.Printf("Cleanup: Current working directory [%s]\n", cwd)
 	os.Remove("derive_stdin_stdout_log.log")
 	os.Remove("derive_stdin_stdout_log_ddb.log")
-	err := os.RemoveAll("redisgidData")
+	err = os.RemoveAll("redisgidData")
 	if err != nil {
 		fmt.Printf("Error removing Directory: %s\n", err)
 	}
@@ -104,56 +115,60 @@ func validateAndSetDates(cfg *trapyz.Config) {
 }
 
 func runPipeline(ctx context.Context, config *trapyz.Config) {
-	fmt.Printf("%s :Run Pipeline started\n", time.Now())
-	connMgr := trapyz.NewConnMgr(config)
-	var nw = 4
-	if config.Nworkers > 0 {
-		nw = config.Nworkers
+	if !skipS3 {
+		fmt.Printf("%s :Run Pipeline started\n", time.Now())
+		connMgr := trapyz.NewConnMgr(config)
+		var nw = 4
+		if config.Nworkers > 0 {
+			nw = config.Nworkers
+		}
+		//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
+		db := connMgr.MustConnectMysql()
+		redisPool := connMgr.MustConnectRedis()
+		/* Flush All */
+		redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
+		/* Rebuild Cache */
+		fmt.Printf("%s :Populating Redis Cache\n", time.Now())
+		cache, err := trapyz.MakeCache(db, redisPool, config)
+		if err != nil {
+			redisPool.Close()
+			db.Close()
+			log.Fatalln(err)
+		}
+		/* Download S3 Files */
+		s3pool := task.New(1)
+		s3pool.Start()
+		dbKey := trapyz.CfgKey(config, "s3")
+		fmt.Printf("%s :Fetching S3 Files from %s to %s\n", time.Now(), config.Aws[dbKey].DateFrom, config.Aws[dbKey].DateTo)
+		trapyz.S3FetchOnTimeRange(ctx, config, s3pool).Wait()
+		s3pool.Stop()
+		/* Start The Log Writer */
+		os.MkdirAll(config.Output.Directory, 0755)
+		ofile := path.Join(config.Output.Directory, config.Output.File)
+		log.Infof("Creating outputfile %s", ofile)
+		outPutFile, err := os.Create(ofile)
+		if err != nil {
+			log.Fatalf("Error unable to create outputfile:%s", err)
+		}
+		defer outPutFile.Close()
+		outchan := make(chan trapyz.GeoLocOutput)
+		go writer(outchan, outPutFile)
+		/* Start the GeoStore workers and wait for them to finish */
+		workerPool := task.New(nw)
+		workerPool.Start()
+		fmt.Printf("%s :Processing json filling Geo stores data\n", time.Now())
+		trapyz.FillGeoStores(config, cache, redisPool, workerPool, outchan).Wait()
+		close(outchan)
+		workerPool.Stop()
 	}
-	//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
-	db := connMgr.MustConnectMysql()
-	redisPool := connMgr.MustConnectRedis()
-	/* Flush All */
-	redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
-	/* Rebuild Cache */
-	fmt.Printf("%s :Populating Redis Cache\n", time.Now())
-	cache, err := trapyz.MakeCache(db, redisPool, config)
-	if err != nil {
-		redisPool.Close()
-		db.Close()
-		log.Fatalln(err)
-	}
-	/* Download S3 Files */
-	s3pool := task.New(1)
-	s3pool.Start()
-	dbKey := trapyz.CfgKey(config, "s3")
-	fmt.Printf("%s :Fetching S3 Files from %s to %s\n", time.Now(), config.Aws[dbKey].DateFrom, config.Aws[dbKey].DateTo)
-	trapyz.S3FetchOnTimeRange(ctx, config, s3pool).Wait()
-	s3pool.Stop()
-	/* Start The Log Writer */
-	os.MkdirAll(config.Output.Directory, 0755)
-	ofile := path.Join(config.Output.Directory, config.Output.File)
-	log.Infof("Creating outputfile %s", ofile)
-	outPutFile, err := os.Create(ofile)
-	if err != nil {
-		log.Fatalf("Error unable to create outputfile:%s", err)
-	}
-	defer outPutFile.Close()
-	outchan := make(chan trapyz.GeoLocOutput)
-	go writer(outchan, outPutFile)
-	/* Start the GeoStore workers and wait for them to finish */
-	workerPool := task.New(nw)
-	workerPool.Start()
-	fmt.Printf("%s :Processing json filling Geo stores data\n", time.Now())
-	trapyz.FillGeoStores(config, cache, redisPool, workerPool, outchan).Wait()
-	close(outchan)
-	workerPool.Stop()
 	runExtras()
 	log.Infof("Pipeline Execution Completed")
 }
 
 func runExtras() {
+	fmt.Printf("%s:Populating dynamo DB and elasticsearch\n", time.Now())
 	if curDir, err := os.Getwd(); err == nil {
+
 		log.Infof("current working directory:[%s]", curDir)
 		defer os.Chdir(curDir)
 	}

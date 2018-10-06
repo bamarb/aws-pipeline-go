@@ -80,3 +80,28 @@ func TestPrefixChan(t *testing.T) {
 		})
 	}
 }
+
+func TestNextTimeAdaptive(t *testing.T) {
+	type args struct {
+		prevStart time.Time
+		prevEnd   time.Time
+		now       time.Time
+	}
+	tests := []struct {
+		name string
+		args args
+		want time.Duration
+	}{
+		{"Test Basic Case",
+			args{timeFor("2018/01/01/00"), timeFor("2018/01/01/01"), timeFor("2018/01/01/01").Add(5 * time.Minute)},
+			time.Minute * 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NextTimeAdaptive(tt.args.prevStart, tt.args.prevEnd, tt.args.now); got != tt.want {
+				t.Errorf("NextTimeAdaptive() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

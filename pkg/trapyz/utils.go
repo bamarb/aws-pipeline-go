@@ -55,19 +55,56 @@ func expandTilde(path string) string {
 	return path
 }
 
-//NextTime returns the remaining duration for the next run
-func NextTime(schedType string) time.Duration {
+//GetStartEndTime returns the Start and End times for the next run
+func GetStartEndTime(schedType string, start, end time.Time) (time.Time, time.Time) {
+	now := time.Now()
+	var nextStart, nextEnd time.Time
+	if "hourly" == schedType {
+		if end.IsZero() {
+			nextStart = roundToHour(now).Add(-1 * time.Hour)
+			nextEnd = roundToHour(now)
+		} else {
+			nextStart = roundToHour(end)
+			nextEnd = nextStart.Add(1 * time.Hour)
+		}
+	}
+
+	if "daily" == schedType {
+		if end.IsZero() {
+			nextStart = roundToHour(now).Add(-1 * time.Hour)
+			nextEnd = roundToHour(now)
+		} else {
+			nextStart = roundToHour(end)
+			nextEnd = nextStart.Add(1 * time.Hour)
+		}
+	}
+	return nextStart, nextEnd
+}
+
+//NextTimeFixed returns the remaining duration for the next run
+func NextTimeFixed(schedType string) time.Duration {
 	now := time.Now()
 	if "hourly" == schedType {
 		t := roundToHour(now).Add(time.Hour*1 + time.Minute*15)
 		return t.Sub(now)
 	}
-
 	if "daily" == schedType {
 		t := roundToDay(now).Add(time.Hour*24 + time.Minute*15)
 		return t.Sub(now)
 	}
 	return 0
+}
+
+//NextTimeAdaptive returns an Adaptive duration.
+//If the the pipeline execution time has overshot the next schedule time
+//The next run is scheduled after a delay of 2 seconds
+//Else it is scheduled at 15 minutes after the next hour
+func NextTimeAdaptive(prevStart, prevEnd, now time.Time) time.Duration {
+	nextSchedule := roundToHour(prevEnd).Add(time.Minute * 15)
+	if now.Before(nextSchedule) {
+		return nextSchedule.Sub(now)
+	}
+	return 2 * time.Second
 }
 
 func roundToHour(t time.Time) time.Time {

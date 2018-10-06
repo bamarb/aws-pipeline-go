@@ -17,21 +17,12 @@ import (
 //ErrorNoBucket is thrown when bucket cannot be found in config
 var ErrorNoBucket = errors.New("Error no aws bucket")
 
-//S3FetchOnSchedule runs on a schedule daily or hourly
-func S3FetchOnSchedule(ctx context.Context, cfg *Config, taskPool *task.Pool) *sync.WaitGroup {
+//S3FetchOnRange runs on an explicit time range
+func S3FetchOnRange(ctx context.Context, cfg *Config,
+	taskPool *task.Pool, start, end time.Time) *sync.WaitGroup {
 	var wg sync.WaitGroup
-	var start, end time.Time
 	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
 	conMgr := NewConnMgr(cfg)
-	//Go back to the beginning of this hour
-	schedule := cfg.Schedule
-	if "hourly" == schedule {
-		end = roundToHour(time.Now())
-		start = end.Add(-time.Hour * 1)
-	} else {
-		end = roundToDay(time.Now())
-		start = end.AddDate(0, 0, -1)
-	}
 	//Parse The dates and get the channel of prefixes
 	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
 	//Get the Dump Prefix
@@ -45,7 +36,7 @@ func S3FetchOnSchedule(ctx context.Context, cfg *Config, taskPool *task.Pool) *s
 	return &wg
 }
 
-//S3FetchOnTimeRange starts a s3 fetcher
+//S3FetchOnTimeRange starts a s3 fetcher based on time range in config
 func S3FetchOnTimeRange(ctx context.Context, cfg *Config, taskPool *task.Pool) *sync.WaitGroup {
 	var wg sync.WaitGroup
 	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]

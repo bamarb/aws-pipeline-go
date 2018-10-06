@@ -23,9 +23,11 @@ import (
 )
 
 var (
-	cfgFile   string
-	startTime = time.Now()
-	config    *trapyz.Config
+	cfgFile      string
+	config       *trapyz.Config
+	runCount     = 0
+	fromDateHour time.Time
+	toDateHour   time.Time
 )
 
 func init() {
@@ -79,9 +81,9 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 		log.Fatalln(err)
 	}
 	/* Download S3 Files */
-	s3pool := task.New(1)
+	s3pool := task.New(2)
 	s3pool.Start()
-	trapyz.S3FetchOnSchedule(ctx, config, s3pool).Wait()
+
 	s3pool.Stop()
 	/* Start The Log Writer */
 	ofile := path.Join(config.Output.Directory, config.Output.File)
@@ -103,22 +105,68 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	trapyz.FillGeoStores(config, cache, redisPool, workerPool, outchan).Wait()
 	close(outchan)
 	workerPool.Stop()
-	/* Exec python3 GenerateDerivedAttributes.py */
-	err = os.Chdir("/home/ubuntu/varunplay")
+	runExtras()
+}
+
+func runExtras() {
+	fmt.Printf("%s:Populating dynamo DB and elasticsearch\n", time.Now())
+	if curDir, err := os.Getwd(); err == nil {
+
+		log.Infof("current working directory:[%s]", curDir)
+		defer os.Chdir(curDir)
+	}
+
+	err := os.Chdir("/home/ubuntu/varunplay")
 	if err != nil {
 		log.Errorf("Error chdir: %s ", err)
 		return
 	}
-	cmd := exec.Command("python3", "GenerateDerivedAttributes.py", "testDataDir/")
+	fmt.Println("Changed working dir to :/home/ubuntu/varunplay")
+	cleanup()
+	outDirName := config.Output.Directory + "/"
+	fmt.Println("Executing python3 GenerateDerivedAttributes.py ", outDirName)
+
+	cmd := exec.Command("python3", "GenerateDerivedAttributes.py", outDirName)
 	err = cmd.Run()
 	if err != nil {
 		log.Errorf("Error Executing GenerateDerivedAttributes.py: %s", err)
 	}
 
+	fmt.Println("Executing python3 ElasticSearchAnalytics.py ")
 	cmdEs := exec.Command("python3", "ElasticSearchAnalytics.py")
 	err = cmdEs.Run()
 	if err != nil {
 		log.Errorf("Error executing ElasticSearchAnalytics.py: %s", err)
+	}
+
+}
+
+func cleanup() {
+	/*
+			rm -rf derive_stdin_stdout_log.log
+		    rm -rf derive_stdin_stdout_log_ddb.log
+		    rm -rf redisgidData/*
+	*/
+	cwd, _ := os.Getwd()
+	key := trapyz.CfgKey(config, "redis-local")
+	redisCfg := config.Db[key]
+	redisConnStr := fmt.Sprintf("%s:%s", redisCfg.Server, redisCfg.Port)
+	redisPool, err := radix.NewPool("tcp", redisConnStr, 1)
+	if err == nil {
+		fmt.Printf("FLUSHING local redis")
+		redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
+		redisPool.Close()
+	}
+	fmt.Printf("Cleanup: Current working directory [%s]\n", cwd)
+	os.Remove("derive_stdin_stdout_log.log")
+	os.Remove("derive_stdin_stdout_log_ddb.log")
+	err = os.RemoveAll("redisgidData")
+	if err != nil {
+		fmt.Printf("Error removing Directory: %s\n", err)
+	}
+	err = os.Mkdir("redisgidData", 0755)
+	if err != nil {
+		fmt.Printf("Error creating directory: %s\n", err)
 	}
 }
 
@@ -140,9 +188,10 @@ func main() {
 		}
 		//Configure a New logfile for this run
 		logFile = configLogging(config.Output)
-		nextDur := trapyz.NextTime(config.Schedule)
-		nextTimer := time.NewTimer(nextDur)
+		nextDur := trapyz.NextTimeAdaptive()
 		log.Infof("Next schedule : %s ", time.Now().Add(nextDur))
+		nextTimer := time.NewTimer(nextDur)
+
 		select {
 		case <-osSignals:
 			log.Infof("Main Shutting down on user signal...")
