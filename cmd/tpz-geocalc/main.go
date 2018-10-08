@@ -74,6 +74,7 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	/* Flush All */
 	redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
 	/* Rebuild Cache */
+	log.Infoln("Rebuilding Redis store and in memory caches")
 	cache, err := trapyz.MakeCache(db, redisPool, config)
 	if err != nil {
 		redisPool.Close()
@@ -81,9 +82,12 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 		log.Fatalln(err)
 	}
 	/* Download S3 Files */
+	/* Calculate the time windows to down load */
+	log.Infof("Starting S3 file download for range: [%s] - [%s]",
+		fromDateHour.Format(time.Stamp), toDateHour.Format(time.Stamp))
 	s3pool := task.New(2)
 	s3pool.Start()
-
+	trapyz.S3FetchOnRange(ctx, config, s3pool, fromDateHour, toDateHour)
 	s3pool.Stop()
 	/* Start The Log Writer */
 	ofile := path.Join(config.Output.Directory, config.Output.File)
@@ -105,13 +109,13 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	trapyz.FillGeoStores(config, cache, redisPool, workerPool, outchan).Wait()
 	close(outchan)
 	workerPool.Stop()
+	log.Infof("Fill Geo stores complete: [%s] - [%s]",
+		fromDateHour.Format(time.Stamp), toDateHour.Format(time.Stamp))
 	runExtras()
 }
 
 func runExtras() {
-	fmt.Printf("%s:Populating dynamo DB and elasticsearch\n", time.Now())
 	if curDir, err := os.Getwd(); err == nil {
-
 		log.Infof("current working directory:[%s]", curDir)
 		defer os.Chdir(curDir)
 	}
@@ -121,10 +125,9 @@ func runExtras() {
 		log.Errorf("Error chdir: %s ", err)
 		return
 	}
-	fmt.Println("Changed working dir to :/home/ubuntu/varunplay")
-	cleanup()
+	log.Infoln("Changed working dir to :/home/ubuntu/varunplay, performing cleanup")
 	outDirName := config.Output.Directory + "/"
-	fmt.Println("Executing python3 GenerateDerivedAttributes.py ", outDirName)
+	log.Infof("Executing python3 GenerateDerivedAttributes.py %s", outDirName)
 
 	cmd := exec.Command("python3", "GenerateDerivedAttributes.py", outDirName)
 	err = cmd.Run()
@@ -132,39 +135,40 @@ func runExtras() {
 		log.Errorf("Error Executing GenerateDerivedAttributes.py: %s", err)
 	}
 
-	fmt.Println("Executing python3 ElasticSearchAnalytics.py ")
+	log.Infof("Executing python3 ElasticSearchAnalytics.py ")
 	cmdEs := exec.Command("python3", "ElasticSearchAnalytics.py")
 	err = cmdEs.Run()
 	if err != nil {
 		log.Errorf("Error executing ElasticSearchAnalytics.py: %s", err)
 	}
-
+	log.Infof("Pipeline run complete")
 }
 
 func cleanup() {
 	/*
 			rm -rf derive_stdin_stdout_log.log
 		    rm -rf derive_stdin_stdout_log_ddb.log
-		    rm -rf redisgidData/*
+			rm -rf redisgidData/*
+			rm -f s3-dump/
 	*/
-	cwd, _ := os.Getwd()
+	trapyz.CleanUpS3DumpDir(config)
+	const pydir = "/home/ubuntu/varunplay/"
 	key := trapyz.CfgKey(config, "redis-local")
 	redisCfg := config.Db[key]
 	redisConnStr := fmt.Sprintf("%s:%s", redisCfg.Server, redisCfg.Port)
 	redisPool, err := radix.NewPool("tcp", redisConnStr, 1)
 	if err == nil {
-		fmt.Printf("FLUSHING local redis")
+		log.Infof("FLUSHING local redis")
 		redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
 		redisPool.Close()
 	}
-	fmt.Printf("Cleanup: Current working directory [%s]\n", cwd)
-	os.Remove("derive_stdin_stdout_log.log")
-	os.Remove("derive_stdin_stdout_log_ddb.log")
-	err = os.RemoveAll("redisgidData")
+	os.Remove(pydir + "derive_stdin_stdout_log.log")
+	os.Remove(pydir + "derive_stdin_stdout_log_ddb.log")
+	err = os.RemoveAll(pydir + "redisgidData")
 	if err != nil {
 		fmt.Printf("Error removing Directory: %s\n", err)
 	}
-	err = os.Mkdir("redisgidData", 0755)
+	err = os.Mkdir(pydir+"redisgidData", 0755)
 	if err != nil {
 		fmt.Printf("Error creating directory: %s\n", err)
 	}
@@ -186,9 +190,13 @@ func main() {
 			//Close the previous log file if any
 			logFile.Close()
 		}
+		//Cleanup data of any previous runs
+		cleanup()
+		//Calculate Next run date times
+		fromDateHour, toDateHour = trapyz.GetStartEndTime(config.Schedule, fromDateHour, toDateHour)
 		//Configure a New logfile for this run
 		logFile = configLogging(config.Output)
-		nextDur := trapyz.NextTimeAdaptive()
+		nextDur := trapyz.NextTimeAdaptive(fromDateHour, toDateHour, time.Now())
 		log.Infof("Next schedule : %s ", time.Now().Add(nextDur))
 		nextTimer := time.NewTimer(nextDur)
 
@@ -198,7 +206,9 @@ func main() {
 			nextTimer.Stop()
 			return
 		case <-nextTimer.C:
+			log.Infof("Starting Pipeline Run")
 			runPipeline(ctx, config)
+			log.Infof("Pipeline run ended")
 		}
 	}
 }

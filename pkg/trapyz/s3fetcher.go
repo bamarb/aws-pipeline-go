@@ -25,8 +25,8 @@ func S3FetchOnRange(ctx context.Context, cfg *Config,
 	conMgr := NewConnMgr(cfg)
 	//Parse The dates and get the channel of prefixes
 	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
-	//Get the Dump Prefix
-	dumpDir := FindAndCreateDestDir(cfg)
+	//Get the Dump directory
+	dumpDir := FindOrCreateDestDir(cfg)
 	s3c := conMgr.MustConnectS3()
 	for i := 0; i < cfg.Nworkers; i++ {
 		task := &S3FetcherTask{ctx, s3c, awsCfgInfo.Bucket, prefixChan, dumpDir, true, &wg}
@@ -48,7 +48,7 @@ func S3FetchOnTimeRange(ctx context.Context, cfg *Config, taskPool *task.Pool) *
 	//Parse The dates and get the channel of prefixes
 	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
 	//Get the Dump Prefix
-	dumpDir := FindAndCreateDestDir(cfg)
+	dumpDir := FindOrCreateDestDir(cfg)
 	s3c := conMgr.MustConnectS3()
 	for i := 0; i < 2; i++ {
 		wg.Add(1)

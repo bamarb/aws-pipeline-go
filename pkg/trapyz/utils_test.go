@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -101,6 +102,37 @@ func TestNextTimeAdaptive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := NextTimeAdaptive(tt.args.prevStart, tt.args.prevEnd, tt.args.now); got != tt.want {
 				t.Errorf("NextTimeAdaptive() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetStartEndTime(t *testing.T) {
+	var zeroStart, zeroEnd time.Time
+	type args struct {
+		schedType string
+		start     time.Time
+		end       time.Time
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  time.Time
+		want1 time.Time
+	}{
+		{"Test-Hourly-Zero-Start-End",
+			args{"hourly", zeroStart, zeroEnd},
+			roundToHour(time.Now()).Add(-1 * time.Hour), roundToHour(time.Now()),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1 := GetStartEndTime(tt.args.schedType, tt.args.start, tt.args.end)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetStartEndTime() got = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got1, tt.want1) {
+				t.Errorf("GetStartEndTime() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}

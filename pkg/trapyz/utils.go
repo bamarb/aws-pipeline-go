@@ -33,14 +33,28 @@ func CfgKey(cfg *Config, dbtype string) string {
 	return fmt.Sprintf("%s-%s", dbtype, defSuffix)
 }
 
-//FindAndCreateDestDir does what the function says
-func FindAndCreateDestDir(cfg *Config) string {
+//FindOrCreateDestDir does what the function says
+func FindOrCreateDestDir(cfg *Config) string {
 	//Get the Dump Prefix
 	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
 	dumpDir := awsCfgInfo.S3dumpPrefix + "-" + cfg.TpzEnv
 	//Create the dump directory
-	os.MkdirAll(dumpDir, 0755)
+	if _, err := os.Stat(dumpDir); os.IsNotExist(err) {
+		os.MkdirAll(dumpDir, 0755)
+	}
 	return dumpDir
+}
+
+//CleanUpS3DumpDir removes the s3 dump directory if it exists and recreates it
+func CleanUpS3DumpDir(cfg *Config) {
+	//Get the Dump Prefix
+	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
+	dumpDir := awsCfgInfo.S3dumpPrefix + "-" + cfg.TpzEnv
+	//Create the dump directory
+	if _, err := os.Stat(dumpDir); !os.IsNotExist(err) {
+		os.RemoveAll(dumpDir)
+	}
+	os.MkdirAll(dumpDir, 0755)
 }
 
 func expandTilde(path string) string {

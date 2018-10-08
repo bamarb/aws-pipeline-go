@@ -172,7 +172,7 @@ func (gct GeoLocCalcTask) OutputToWriter(vars map[string]string, store geostore.
 func FillGeoStores(config *Config, cache *Cache, redisPool *radix.Pool,
 	taskPool *task.Pool, outchan chan GeoLocOutput) *sync.WaitGroup {
 	var wg sync.WaitGroup
-	inputDir := FindAndCreateDestDir(config)
+	inputDir := FindOrCreateDestDir(config)
 	config.Inputdir = inputDir
 	filesToProcess, err := ioutil.ReadDir(inputDir)
 	if err != nil {
