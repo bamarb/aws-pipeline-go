@@ -21,7 +21,7 @@ func TestPrefixChan(t *testing.T) {
 	bctx := context.Background()
 	topPfx1 := []string{"bobble"}
 	yesterday := roundToDay(time.Now().AddDate(0, 0, -1))
-	prefixYesterday := fmt.Sprintf("bobble/%s", yesterday.Format(dateFormat))
+	prefixYesterday := fmt.Sprintf("bobble/%s", yesterday.Format(DateFormat))
 	dateStart, dateEnd, err := ParseDates("", "")
 	if err != nil {
 		t.Error("ParseDates unexpected error:", err)
@@ -52,7 +52,7 @@ func TestPrefixChan(t *testing.T) {
 		{"Non Neg Test 4", args{bctx, "2018/09/06/00", "2018/09/06/02", topPfx1},
 			[]string{"bobble/2018/09/06/00", "bobble/2018/09/06/01"}, false},
 
-		{"Non Neg Test 5", args{bctx, dateStart.Format(dateHourFormat), dateEnd.Format(dateHourFormat), topPfx1},
+		{"Non Neg Test 5", args{bctx, dateStart.Format(DateHourFormat), dateEnd.Format(DateHourFormat), topPfx1},
 			[]string{prefixYesterday}, false},
 	}
 	for _, tt := range tests {

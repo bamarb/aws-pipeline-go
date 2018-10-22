@@ -52,6 +52,16 @@ func configLogging(logCfg trapyz.OutputInfo) *os.File {
 	return f
 }
 
+//CleanUpS3DumpDir removes the s3 dump directory if it exists and recreates it
+func CleanUpS3DumpDir(cfg *trapyz.Config) {
+	//Get the Dump Prefix
+	awsCfgInfo := cfg.Aws[trapyz.CfgKey(cfg, "s3")]
+	dumpDir := awsCfgInfo.S3dumpPrefix + "-" + cfg.TpzEnv
+	log.Infof("Cleanup: Removing Directory %s", dumpDir)
+	os.RemoveAll(dumpDir)
+	os.MkdirAll(dumpDir, 0755)
+}
+
 func writer(records chan trapyz.GeoLocOutput, outFile *os.File) {
 	for rec := range records {
 		if rec.UID == "" {
@@ -67,6 +77,8 @@ func writer(records chan trapyz.GeoLocOutput, outFile *os.File) {
 }
 
 func runPipeline(ctx context.Context, config *trapyz.Config) {
+	//Cleanup Old data
+	cleanup()
 	connMgr := trapyz.NewConnMgr(config)
 	//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
 	db := connMgr.MustConnectMysql()
@@ -151,7 +163,8 @@ func cleanup() {
 			rm -rf redisgidData/*
 			rm -f s3-dump/
 	*/
-	trapyz.CleanUpS3DumpDir(config)
+	log.Infoln("Cleaning up previous run data")
+	CleanUpS3DumpDir(config)
 	const pydir = "/home/ubuntu/varunplay/"
 	key := trapyz.CfgKey(config, "redis-local")
 	redisCfg := config.Db[key]
@@ -190,14 +203,15 @@ func main() {
 			//Close the previous log file if any
 			logFile.Close()
 		}
-		//Cleanup data of any previous runs
-		cleanup()
 		//Calculate Next run date times
 		fromDateHour, toDateHour = trapyz.GetStartEndTime(config.Schedule, fromDateHour, toDateHour)
 		//Configure a New logfile for this run
 		logFile = configLogging(config.Output)
 		nextDur := trapyz.NextTimeAdaptive(fromDateHour, toDateHour, time.Now())
-		log.Infof("Next schedule : %s ", time.Now().Add(nextDur))
+		log.Infof("Next schedule @ %s: For Range [%s - %s]",
+			time.Now().Add(nextDur).Format(time.Stamp),
+			fromDateHour.Format(trapyz.DateHourFormat),
+			toDateHour.Format(trapyz.DateHourFormat))
 		nextTimer := time.NewTimer(nextDur)
 
 		select {
@@ -208,7 +222,6 @@ func main() {
 		case <-nextTimer.C:
 			log.Infof("Starting Pipeline Run")
 			runPipeline(ctx, config)
-			log.Infof("Pipeline run ended")
 		}
 	}
 }

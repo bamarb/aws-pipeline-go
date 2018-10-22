@@ -18,8 +18,8 @@ var ErrorInvalidDate = errors.New("Invalid Date Time format")
 //ErrorStartAfterEnd an error thrown when a from date falls after the to date
 var ErrorStartAfterEnd = errors.New("Invalid from and to dates from-date is after to-date")
 
-const dateFormat = "2006/01/02"
-const dateHourFormat = "2006/01/02/15"
+const DateFormat = "2006/01/02"
+const DateHourFormat = "2006/01/02/15"
 
 var dateRegex = regexp.MustCompile(`^(\d{4})/(\d{2})/(\d{2})$`)
 
@@ -43,18 +43,6 @@ func FindOrCreateDestDir(cfg *Config) string {
 		os.MkdirAll(dumpDir, 0755)
 	}
 	return dumpDir
-}
-
-//CleanUpS3DumpDir removes the s3 dump directory if it exists and recreates it
-func CleanUpS3DumpDir(cfg *Config) {
-	//Get the Dump Prefix
-	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
-	dumpDir := awsCfgInfo.S3dumpPrefix + "-" + cfg.TpzEnv
-	//Create the dump directory
-	if _, err := os.Stat(dumpDir); !os.IsNotExist(err) {
-		os.RemoveAll(dumpDir)
-	}
-	os.MkdirAll(dumpDir, 0755)
 }
 
 func expandTilde(path string) string {
@@ -142,7 +130,7 @@ func datePrefixGenerator(fromDate time.Time, toDate time.Time) []string {
 
 	if !crossesDayBoundary(fromDate, toDate) {
 		for i := fromDate.Hour(); i < toDate.Hour(); i++ {
-			str := fmt.Sprintf("%s/%02d", fromDate.Format(dateFormat), i)
+			str := fmt.Sprintf("%s/%02d", fromDate.Format(DateFormat), i)
 			prefixes = append(prefixes, str)
 		}
 		return prefixes
@@ -152,23 +140,23 @@ func datePrefixGenerator(fromDate time.Time, toDate time.Time) []string {
 	n := spanDays(roundToDay(nd), roundToDay(toDate))
 
 	if fromDate.Hour() == 0 {
-		prefixes = append(prefixes, fromDate.Format(dateFormat))
+		prefixes = append(prefixes, fromDate.Format(DateFormat))
 	} else {
 		for i := fromDate.Hour(); i < 24; i++ {
-			str := fmt.Sprintf("%s/%02d", fromDate.Format(dateFormat), i)
+			str := fmt.Sprintf("%s/%02d", fromDate.Format(DateFormat), i)
 			prefixes = append(prefixes, str)
 		}
 	}
 
 	for i := 0; i < n; i++ {
 		nextDay := nd.AddDate(0, 0, i)
-		prefixes = append(prefixes, nextDay.Format(dateFormat))
+		prefixes = append(prefixes, nextDay.Format(DateFormat))
 
 	}
 
 	if toDate.Hour() != 0 {
 		for i := 0; i < toDate.Hour(); i++ {
-			str := fmt.Sprintf("%s/%02d", toDate.Format(dateFormat), i)
+			str := fmt.Sprintf("%s/%02d", toDate.Format(DateFormat), i)
 			prefixes = append(prefixes, str)
 		}
 	}
@@ -178,10 +166,10 @@ func datePrefixGenerator(fromDate time.Time, toDate time.Time) []string {
 //ParseDate parses a date, a date/hour or throws an error
 func ParseDate(dateStr string) (time.Time, error) {
 	if didMatch := dateRegex.MatchString(dateStr); didMatch {
-		dt, err := time.Parse(dateFormat, dateStr)
+		dt, err := time.Parse(DateFormat, dateStr)
 		return dt, err
 	}
-	return time.Parse(dateHourFormat, dateStr)
+	return time.Parse(DateHourFormat, dateStr)
 }
 
 //ParseDates parses a start (fd) and end (td) date strings into time.Time objects
