@@ -108,6 +108,7 @@ func mkCategoryMap(db *sqlx.DB) map[string]int {
 			log.Errorf("Error scan CategoryMap: %s", err)
 			continue
 		}
+		name = strings.ToLower(name)
 		ret[name] = catid
 	}
 	return ret
@@ -129,6 +130,7 @@ func mkSubCategoryMap(db *sqlx.DB) map[string]int {
 			log.Errorf("Error scan SubCategoryMap: %s", err)
 			continue
 		}
+		name = strings.ToLower(name)
 		ret[name] = subcatid
 	}
 	return ret
@@ -234,6 +236,8 @@ func mkLocCache(db *sqlx.DB, catm, scatm, cm map[string]int,
 			log.Errorf("mkLocCache scan failed: %s\n", err)
 			continue
 		}
+		cat = strings.ToLower(cat)
+		subcat = strings.ToLower(subcat)
 		//log.Debugf("Scanned: %d, %s, %s, %s,%s, %d", uuid, sname, cat, subcat, city, pincode)
 		uuidstr := strconv.Itoa(uuid)
 		catid = strconv.Itoa(catm[cat])
