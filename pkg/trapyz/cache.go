@@ -240,6 +240,10 @@ func mkLocCache(db *sqlx.DB, catm, scatm, cm map[string]int,
 		subcatid = strconv.Itoa(scatm[subcat])
 		cityid = strconv.Itoa(cm[city])
 		pinid = strconv.Itoa(pm[pincode])
+		if catid == "0" || catid == "" || subcatid == "0" || subcatid == "" {
+			log.Errorf("ERROR: catid:[%s] subcatid:[%s] catname:[%s] subcatname:[%s]",
+				catid, subcatid, cat, subcat)
+		}
 		ret[uuidstr] = GeoLocOutput{UID: uuidstr, Pin: pinid, Sname: sname, Cat: catid, Subcat: subcatid, City: cityid}
 	}
 	return ret
