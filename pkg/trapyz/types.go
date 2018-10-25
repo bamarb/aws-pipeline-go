@@ -41,6 +41,7 @@ type OutputInfo struct {
 	File      string
 	Logdir    string
 	Logfile   string
+	Redisdir  string
 }
 
 // AwsS3Info holds aws s3 config
