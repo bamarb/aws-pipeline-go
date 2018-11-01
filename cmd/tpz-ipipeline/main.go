@@ -206,8 +206,8 @@ func runExtras() {
 	log.Infoln("Executing python3 GenerateDerivedAttributesInteractive.py ",
 		"--localRedisPort 6381", "--intermediateCache ", redisDirCache, outDirName)
 
-	cmd := exec.Command("python3", "GenerateDerivedAttributesInteractive.py",
-		"--localRedisPort", "6381", "--intermediateCache", redisDirCache, outDirName)
+	cmd := exec.Command("python3", "GenerateDerivedAttributesInteractive.py", outDirName,
+		"--localRedisPort", "6381", "--intermediateCache", redisDirCache)
 	err = cmd.Run()
 	if err != nil {
 		log.Errorf("Error Executing GenerateDerivedAttributesInteractive.py: %s", err)
