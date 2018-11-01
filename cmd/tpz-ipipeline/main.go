@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/mediocregopher/radix.v3"
@@ -202,12 +203,13 @@ func runExtras() {
 	}
 	log.Infoln("Changed working dir to :/home/ubuntu/varunplay")
 	outDirName := config.Output.Directory + "/"
+	numRecords := strconv.Itoa(config.NumRecords)
 	redisDirCache := config.Output.Redisdir
-	log.Infoln("Executing python3 GenerateDerivedAttributesInteractive.py ",
-		"--localRedisPort 6381", "--intermediateCache ", redisDirCache, outDirName)
+	log.Infoln("Executing python3 GenerateDerivedAttributesInteractive.py ", outDirName,
+		"--localRedisPort 6381", "--intermediateCache ", redisDirCache)
 
 	cmd := exec.Command("python3", "GenerateDerivedAttributesInteractive.py", outDirName,
-		"--localRedisPort", "6381", "--intermediateCache", redisDirCache)
+		"--localRedisPort", "6381", "--intermediateCache", redisDirCache, "--linesToBeProcessed", numRecords)
 	err = cmd.Run()
 	if err != nil {
 		log.Errorf("Error Executing GenerateDerivedAttributesInteractive.py: %s", err)

@@ -59,13 +59,14 @@ type AwsS3Info struct {
 
 // Config config struct decoded from toml
 type Config struct {
-	Version  string
-	Radius   string
-	Nworkers int
-	Inputdir string
-	Schedule string
-	TpzEnv   string `toml:"tpz_env"`
-	Output   OutputInfo
-	Db       map[string]Database
-	Aws      map[string]AwsS3Info
+	Version    string
+	Radius     string
+	Nworkers   int
+	Inputdir   string
+	Schedule   string
+	TpzEnv     string `toml:"tpz_env"`
+	NumRecords int    `toml:"num_records"`
+	Output     OutputInfo
+	Db         map[string]Database
+	Aws        map[string]AwsS3Info
 }
