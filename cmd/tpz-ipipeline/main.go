@@ -206,7 +206,7 @@ func runExtras() {
 	numRecords := strconv.Itoa(config.NumRecords)
 	redisDirCache := config.Output.Redisdir
 	log.Infoln("Executing python3 GenerateDerivedAttributesInteractive.py ", outDirName,
-		"--localRedisPort 6381", "--intermediateCache ", redisDirCache)
+		"--localRedisPort 6381", "--intermediateCache ", redisDirCache, "--linesToBeProcessed", numRecords)
 
 	cmd := exec.Command("python3", "GenerateDerivedAttributesInteractive.py", outDirName,
 		"--localRedisPort", "6381", "--intermediateCache", redisDirCache, "--linesToBeProcessed", numRecords)

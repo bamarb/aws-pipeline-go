@@ -55,7 +55,7 @@ func (gct GeoLocCalcTask) Task() {
 		for scanner.Scan() {
 			var jsonMap map[string]interface{}
 			json.Unmarshal(scanner.Bytes(), &jsonMap)
-			parsedMap, ok := convertJSONMap(jsonMap, requiredJSONKeys)
+			parsedMap, ok := gct.convertJSONMap(jsonMap, requiredJSONKeys)
 			if !ok {
 				//log.Errorf("Error Keys Missing:%s", scanner.Text())
 				errorCount++
@@ -77,8 +77,12 @@ func (gct GeoLocCalcTask) Task() {
 	}
 }
 
-func convertJSONMap(jmap map[string]interface{}, requiredKeys []string) (map[string]string, bool) {
+func (gct GeoLocCalcTask) convertJSONMap(jmap map[string]interface{}, requiredKeys []string) (map[string]string, bool) {
 	retMap := make(map[string]string)
+	awsCfgInfo := gct.Cfg.Aws[CfgKey(gct.Cfg, "s3")]
+	if awsCfgInfo.Apikey != "" {
+		jmap["apikey"] = awsCfgInfo.Apikey
+	}
 	for _, rkey := range requiredKeys {
 		//Check if key is present
 		if _, ok := jmap[rkey]; !ok {

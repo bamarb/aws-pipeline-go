@@ -53,6 +53,7 @@ type AwsS3Info struct {
 	DateFrom     string `toml:"date_from"`
 	DateTo       string `toml:"date_to"`
 	S3dumpPrefix string `toml:"s3dump_prefix"`
+	Apikey       string
 	Flatten      bool
 	Unzip        bool
 }

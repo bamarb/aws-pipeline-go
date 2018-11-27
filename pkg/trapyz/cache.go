@@ -12,7 +12,7 @@ import (
 )
 
 //RedisGeoIndexName the index key in redis where the cache is stored
-const RedisGeoIndexName = "store:locations"
+const RedisGeoIndexName = "istore:locations"
 
 //Cache holds reverse index maps for reverse lookup
 type Cache struct {
