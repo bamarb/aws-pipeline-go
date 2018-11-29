@@ -18,7 +18,10 @@ var ErrorInvalidDate = errors.New("Invalid Date Time format")
 //ErrorStartAfterEnd an error thrown when a from date falls after the to date
 var ErrorStartAfterEnd = errors.New("Invalid from and to dates from-date is after to-date")
 
+//DateFormat the date format used for parsing dates
 const DateFormat = "2006/01/02"
+
+//DateHourFormat the date hour format for parsing dates
 const DateHourFormat = "2006/01/02/15"
 
 var dateRegex = regexp.MustCompile(`^(\d{4})/(\d{2})/(\d{2})$`)
@@ -125,9 +128,14 @@ func crossesDayBoundary(fd time.Time, td time.Time) bool {
 	return roundToDay(td).Sub(roundToDay(fd)).Hours() > 0
 }
 
-func datePrefixGenerator(fromDate time.Time, toDate time.Time) []string {
+func datePrefixGenerator(fromDate time.Time, toDate time.Time, dateFormat string) []string {
 	var prefixes []string
-
+	var dateFmt string
+	if dateFormat == "" {
+		dateFmt = DateFormat
+	} else {
+		dateFmt = dateFormat
+	}
 	if !crossesDayBoundary(fromDate, toDate) {
 		for i := fromDate.Hour(); i < toDate.Hour(); i++ {
 			str := fmt.Sprintf("%s/%02d", fromDate.Format(DateFormat), i)
@@ -140,23 +148,23 @@ func datePrefixGenerator(fromDate time.Time, toDate time.Time) []string {
 	n := spanDays(roundToDay(nd), roundToDay(toDate))
 
 	if fromDate.Hour() == 0 {
-		prefixes = append(prefixes, fromDate.Format(DateFormat))
+		prefixes = append(prefixes, fromDate.Format(dateFmt))
 	} else {
 		for i := fromDate.Hour(); i < 24; i++ {
-			str := fmt.Sprintf("%s/%02d", fromDate.Format(DateFormat), i)
+			str := fmt.Sprintf("%s/%02d", fromDate.Format(dateFmt), i)
 			prefixes = append(prefixes, str)
 		}
 	}
 
 	for i := 0; i < n; i++ {
 		nextDay := nd.AddDate(0, 0, i)
-		prefixes = append(prefixes, nextDay.Format(DateFormat))
+		prefixes = append(prefixes, nextDay.Format(dateFmt))
 
 	}
 
 	if toDate.Hour() != 0 {
 		for i := 0; i < toDate.Hour(); i++ {
-			str := fmt.Sprintf("%s/%02d", toDate.Format(DateFormat), i)
+			str := fmt.Sprintf("%s/%02d", toDate.Format(dateFmt), i)
 			prefixes = append(prefixes, str)
 		}
 	}
@@ -201,8 +209,8 @@ func ParseDates(fd string, td string) (time.Time, time.Time, error) {
 }
 
 //PrefixChan provides a channel of prefixes so that multiple go routines can consume a prefix in parallel
-func PrefixChan(ctx context.Context, start time.Time, end time.Time, topPrefixes []string) <-chan string {
-	datePrefixes := datePrefixGenerator(start, end)
+func PrefixChan(ctx context.Context, start time.Time, end time.Time, topPrefixes []string, dateFormat string) <-chan string {
+	datePrefixes := datePrefixGenerator(start, end, dateFormat)
 	var n = len(topPrefixes) * len(datePrefixes)
 	allPrefixes := make([]string, 0, n)
 	for _, tp := range topPrefixes {

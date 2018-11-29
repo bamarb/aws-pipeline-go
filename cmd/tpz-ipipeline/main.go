@@ -28,6 +28,7 @@ var (
 	startTime    = time.Now()
 	config       *trapyz.Config
 	skipS3       bool
+	skipDB       bool
 	repopKey     = "repopulate"
 )
 
@@ -36,6 +37,7 @@ func init() {
 	flag.StringVar(&fromDateHour, "fdh", "", "From date hour in YYYY/MM/DD or YYYY/MM/DD/HH format")
 	flag.StringVar(&toDateHour, "tdh", "", "To date hour in the form YYYY/MM/DD or YYYY/MM/DD/HH")
 	flag.BoolVar(&skipS3, "s", false, "Skip make cache and s3 download steps")
+	flag.BoolVar(&skipDB, "t", false, "Download files from s3 and process them, but skip upload to DB and ES")
 }
 
 //CleanUpS3DumpDir removes the s3 dump directory if it exists and recreates it
@@ -242,6 +244,8 @@ func main() {
 	if !skipS3 {
 		runPipeline(ctx, config)
 	}
-	runExtras()
+	if !skipDB {
+		runExtras()
+	}
 	logFile.Close()
 }

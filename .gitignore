@@ -1,0 +1,8 @@
+*.iml
+.idea
+.vscode
+.tscache
+.DS_Store
+tpz-geocalc
+tpz-ipipeline
+tpz-*

@@ -72,7 +72,10 @@ schedule = "hourly"
     ]
     #Directory prefix, suffix will be tpz env [eg:s3dump-prod] 
     s3dump_prefix = "./s3dump"
-    flatten = true
+    #The date format of s3 buckets
+    #The date format string must follow golang's date format convention
+    date_format="2006-01-02"
+    fetch_hourly=false
 
     [aws.s3-dev]
     region="us-east-1"

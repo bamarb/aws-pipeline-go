@@ -24,7 +24,8 @@ func S3FetchOnRange(ctx context.Context, cfg *Config,
 	awsCfgInfo := cfg.Aws[CfgKey(cfg, "s3")]
 	conMgr := NewConnMgr(cfg)
 	//Parse The dates and get the channel of prefixes
-	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
+	log.Infof("using date format: [%s]", awsCfgInfo.DateFormat)
+	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes, awsCfgInfo.DateFormat)
 	//Get the Dump directory
 	dumpDir := FindOrCreateDestDir(cfg)
 	s3c := conMgr.MustConnectS3()
@@ -45,8 +46,9 @@ func S3FetchOnTimeRange(ctx context.Context, cfg *Config, taskPool *task.Pool) *
 	if err != nil {
 		panic(err)
 	}
+	log.Infof("using date format: [%s]", awsCfgInfo.DateFormat)
 	//Parse The dates and get the channel of prefixes
-	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes)
+	prefixChan := PrefixChan(ctx, start, end, awsCfgInfo.Prefixes, awsCfgInfo.DateFormat)
 	//Get the Dump Prefix
 	dumpDir := FindOrCreateDestDir(cfg)
 	s3c := conMgr.MustConnectS3()
@@ -75,6 +77,7 @@ type S3FetcherTask struct {
 func (ft *S3FetcherTask) Task() {
 	for prefix := range ft.prefixChan {
 		//List the Files(Objects) for the prefix
+		log.Infof("Processing prefix: [%s]", prefix)
 		s3files := ft.filesForPrefix(prefix)
 		for _, s3file := range s3files {
 			log.Infof("Downloading  file:%s  size:%d", s3file, s3file.Size())
@@ -89,6 +92,7 @@ func (ft *S3FetcherTask) Task() {
 
 func (ft *S3FetcherTask) filesForPrefix(pfx string) []file.File {
 	s3files := make([]file.File, 0, 5)
+	log.Infof("Processing bucket:[%s] Prefix:[%s]", ft.bucket, pfx)
 	s3Input := s3.ListObjectsV2Input{
 		Bucket: aws.String(ft.bucket),
 		Prefix: aws.String(pfx),
@@ -97,6 +101,7 @@ func (ft *S3FetcherTask) filesForPrefix(pfx string) []file.File {
 	err := ft.conn.ListObjectsV2PagesWithContext(ft.ctx, &s3Input,
 		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 			for _, obj := range page.Contents {
+				log.Infof("Adding File for Download:[%s]", *obj.Key)
 				s3files = append(s3files, file.NewS3File(ft.conn, ft.bucket, obj))
 			}
 			return true

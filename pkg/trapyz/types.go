@@ -54,20 +54,21 @@ type AwsS3Info struct {
 	DateTo       string `toml:"date_to"`
 	S3dumpPrefix string `toml:"s3dump_prefix"`
 	Apikey       string
-	Flatten      bool
+	DateFormat   string `toml:"date_format"`
 	Unzip        bool
 }
 
 // Config config struct decoded from toml
 type Config struct {
-	Version    string
-	Radius     string
-	Nworkers   int
-	Inputdir   string
-	Schedule   string
-	TpzEnv     string `toml:"tpz_env"`
-	NumRecords int    `toml:"num_records"`
-	Output     OutputInfo
-	Db         map[string]Database
-	Aws        map[string]AwsS3Info
+	Version       string
+	Radius        string
+	Nworkers      int
+	Inputdir      string
+	Schedule      string
+	TpzEnv        string `toml:"tpz_env"`
+	NumRecords    int    `toml:"num_records"`
+	RedisCacheKey string `toml:"redis_cache_key"`
+	Output        OutputInfo
+	Db            map[string]Database
+	Aws           map[string]AwsS3Info
 }

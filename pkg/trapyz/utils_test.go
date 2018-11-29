@@ -23,6 +23,7 @@ func TestPrefixChan(t *testing.T) {
 	yesterday := roundToDay(time.Now().AddDate(0, 0, -1))
 	prefixYesterday := fmt.Sprintf("bobble/%s", yesterday.Format(DateFormat))
 	dateStart, dateEnd, err := ParseDates("", "")
+	dateFmt := DateFormat
 	if err != nil {
 		t.Error("ParseDates unexpected error:", err)
 	}
@@ -32,6 +33,7 @@ func TestPrefixChan(t *testing.T) {
 		fromDate    string
 		toDate      string
 		topPrefixes []string
+		dateFormat  string
 	}
 
 	tests := []struct {
@@ -40,24 +42,24 @@ func TestPrefixChan(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
-		{"Non Neg Test 0", args{bctx, "2018/01/01", "2018/01/02", topPfx1},
-			[]string{"bobble/2018/01/01"}, false},
+		{"Non Neg Test 0", args{bctx, "2018/01/01", "2018/01/05", topPfx1, dateFmt},
+			[]string{"bobble/2018/01/01", "bobble/2018/01/02", "bobble/2018/01/03", "bobble/2018/01/04"}, false},
 
-		{"Non Neg Test 1", args{bctx, "2018/01/01/23", "2018/01/02/01", topPfx1},
+		{"Non Neg Test 1", args{bctx, "2018/01/01/23", "2018/01/02/01", topPfx1, dateFmt},
 			[]string{"bobble/2018/01/01/23", "bobble/2018/01/02/00"}, false},
 
-		{"Non Neg Test 2", args{bctx, "2018/01/01/23", "2018/01/02/00", topPfx1},
+		{"Non Neg Test 2", args{bctx, "2018/01/01/23", "2018/01/02/00", topPfx1, dateFmt},
 			[]string{"bobble/2018/01/01/23"}, false},
 
-		{"Non Neg Test 4", args{bctx, "2018/09/06/00", "2018/09/06/02", topPfx1},
+		{"Non Neg Test 4", args{bctx, "2018/09/06/00", "2018/09/06/02", topPfx1, dateFmt},
 			[]string{"bobble/2018/09/06/00", "bobble/2018/09/06/01"}, false},
 
-		{"Non Neg Test 5", args{bctx, dateStart.Format(DateHourFormat), dateEnd.Format(DateHourFormat), topPfx1},
+		{"Non Neg Test 5", args{bctx, dateStart.Format(DateHourFormat), dateEnd.Format(DateHourFormat), topPfx1, dateFmt},
 			[]string{prefixYesterday}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := PrefixChan(tt.args.ctx, timeFor(tt.args.fromDate), timeFor(tt.args.toDate), tt.args.topPrefixes)
+			got := PrefixChan(tt.args.ctx, timeFor(tt.args.fromDate), timeFor(tt.args.toDate), tt.args.topPrefixes, tt.args.dateFormat)
 			if nil == got {
 				t.Errorf("PrefixChan() unexpected nil channel")
 				return
@@ -68,6 +70,7 @@ func TestPrefixChan(t *testing.T) {
 					t.Logf("Got prefix:%s", pfx)
 					continue
 				}
+				t.Logf("Generated Prefix:[%s]", pfx)
 				found := false
 				for _, expectedStr := range tt.want {
 					if expectedStr == pfx {

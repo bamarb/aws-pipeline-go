@@ -12,7 +12,7 @@ import (
 )
 
 //RedisGeoIndexName the index key in redis where the cache is stored
-const RedisGeoIndexName = "istore:locations"
+const RedisGeoIndexName = "store:locations"
 
 //Cache holds reverse index maps for reverse lookup
 type Cache struct {
@@ -178,7 +178,7 @@ func mkCityMap(db *sqlx.DB) map[string]int {
 
 func mkPincodeMap(db *sqlx.DB) map[int]int {
 	ret := make(map[int]int)
-	rows, err := db.Query(`SELECT id, Pincode from Pincode`)
+	rows, err := db.Query(`SELECT id, Pincode from PincodeMap`)
 	if err != nil {
 		return ret
 	}
