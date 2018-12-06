@@ -75,6 +75,9 @@ schedule = "hourly"
     #The date format of s3 buckets
     #The date format string must follow golang's date format convention
     date_format="2006-01-02"
+    #Scale createdAt time from seconds to milliseconds if true.
+    #If this option does not exist it is considered as false
+    scale_time = true
     fetch_hourly=false
 
     [aws.s3-dev]

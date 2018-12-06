@@ -55,6 +55,7 @@ type AwsS3Info struct {
 	S3dumpPrefix string `toml:"s3dump_prefix"`
 	Apikey       string
 	DateFormat   string `toml:"date_format"`
+	ScaleTime    bool   `toml:"scale_time"`
 	Unzip        bool
 }
 

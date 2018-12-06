@@ -26,6 +26,8 @@ const DateHourFormat = "2006/01/02/15"
 
 var dateRegex = regexp.MustCompile(`^(\d{4})/(\d{2})/(\d{2})$`)
 
+const decryptKey string = "ragini2017"
+
 //CfgKey returns a config key depending on the tpz_env config
 //variable in the config file
 func CfgKey(cfg *Config, dbtype string) string {

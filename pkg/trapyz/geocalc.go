@@ -66,6 +66,7 @@ func (gct GeoLocCalcTask) Task() {
 				errorCount++
 				continue
 			}
+
 			err = gct.OutputToWriter(parsedMap, store)
 			if err != nil {
 				errorCount++
@@ -88,8 +89,18 @@ func (gct GeoLocCalcTask) convertJSONMap(jmap map[string]interface{}, requiredKe
 		if _, ok := jmap[rkey]; !ok {
 			return nil, false
 		}
-		retMap[rkey] = valToString(jmap[rkey])
+		if rkey == "createdAt" && awsCfgInfo.ScaleTime {
+			createdAtInt, ok := jmap[rkey].(float64)
+			if !ok {
+				log.Errorf("Error converting created At to int got:[%s]", jmap[rkey])
+			}
+			retMap[rkey] = strconv.FormatInt(int64(createdAtInt)*1000, 10)
+
+		} else {
+			retMap[rkey] = valToString(jmap[rkey])
+		}
 	}
+
 	return retMap, true
 }
 
