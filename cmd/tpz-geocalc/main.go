@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -127,7 +128,9 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 }
 
 func runExtras() {
+	log.Infoln("Populating dynamo DB and elasticsearch")
 	if curDir, err := os.Getwd(); err == nil {
+
 		log.Infof("current working directory:[%s]", curDir)
 		defer os.Chdir(curDir)
 	}
@@ -137,17 +140,24 @@ func runExtras() {
 		log.Errorf("Error chdir: %s ", err)
 		return
 	}
-	log.Infoln("Changed working dir to :/home/ubuntu/varunplay, performing cleanup")
+	log.Infoln("Changed working dir to :/home/ubuntu/varunplay")
+	redisLocalKey := trapyz.CfgKey(config, "redis-local")
+	redisCfg := config.Db[redisLocalKey]
+	redisLocalPort := redisCfg.Port
 	outDirName := config.Output.Directory + "/"
-	log.Infof("Executing python3 GenerateDerivedAttributes.py %s", outDirName)
+	numRecords := strconv.Itoa(config.NumRecords)
+	redisDirCache := config.Output.Redisdir
+	log.Infoln("Executing python3 GenerateDerivedAttributesInteractive.py ", outDirName,
+		"--localRedisPort", redisLocalPort, "--intermediateCache ", redisDirCache, "--linesToBeProcessed", numRecords)
 
-	cmd := exec.Command("python3", "GenerateDerivedAttributes.py", outDirName)
+	cmd := exec.Command("python3", "GenerateDerivedAttributesInteractive.py", outDirName,
+		"--localRedisPort", redisLocalPort, "--intermediateCache", redisDirCache, "--linesToBeProcessed", numRecords)
 	err = cmd.Run()
 	if err != nil {
-		log.Errorf("Error Executing GenerateDerivedAttributes.py: %s", err)
+		log.Errorf("Error Executing GenerateDerivedAttributesInteractive.py: %s", err)
 	}
 
-	log.Infof("Executing python3 ElasticSearchAnalytics.py ")
+	log.Infoln("Executing python3 ElasticSearchAnalytics.py ")
 	cmdEs := exec.Command("python3", "ElasticSearchAnalytics.py")
 	err = cmdEs.Run()
 	if err != nil {

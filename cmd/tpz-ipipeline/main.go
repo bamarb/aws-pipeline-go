@@ -191,7 +191,7 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 }
 
 func runExtras() {
-	fmt.Printf("%s:Populating dynamo DB and elasticsearch\n", time.Now())
+	log.Infoln("Populating dynamo DB and elasticsearch")
 	if curDir, err := os.Getwd(); err == nil {
 
 		log.Infof("current working directory:[%s]", curDir)
@@ -204,14 +204,17 @@ func runExtras() {
 		return
 	}
 	log.Infoln("Changed working dir to :/home/ubuntu/varunplay")
+	redisLocalKey := trapyz.CfgKey(config, "redis-local")
+	redisCfg := config.Db[redisLocalKey]
+	redisLocalPort := redisCfg.Port
 	outDirName := config.Output.Directory + "/"
 	numRecords := strconv.Itoa(config.NumRecords)
 	redisDirCache := config.Output.Redisdir
 	log.Infoln("Executing python3 GenerateDerivedAttributesInteractive.py ", outDirName,
-		"--localRedisPort 6381", "--intermediateCache ", redisDirCache, "--linesToBeProcessed", numRecords)
+		"--localRedisPort", redisLocalPort, "--intermediateCache ", redisDirCache, "--linesToBeProcessed", numRecords)
 
 	cmd := exec.Command("python3", "GenerateDerivedAttributesInteractive.py", outDirName,
-		"--localRedisPort", "6381", "--intermediateCache", redisDirCache, "--linesToBeProcessed", numRecords)
+		"--localRedisPort", redisLocalPort, "--intermediateCache", redisDirCache, "--linesToBeProcessed", numRecords)
 	err = cmd.Run()
 	if err != nil {
 		log.Errorf("Error Executing GenerateDerivedAttributesInteractive.py: %s", err)
@@ -223,6 +226,7 @@ func runExtras() {
 	if err != nil {
 		log.Errorf("Error executing ElasticSearchAnalytics.py: %s", err)
 	}
+	log.Infof("Pipeline run complete")
 }
 
 func main() {
