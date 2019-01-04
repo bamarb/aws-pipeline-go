@@ -38,6 +38,7 @@ type GeoLocCalcTask struct {
 //Task calculates the geo distances from a store
 func (gct GeoLocCalcTask) Task() {
 	defer gct.Wg.Done()
+	indexKey := gct.Cfg.RedisCacheKey
 	store := geostore.NewGeoLocationStore(gct.RedisPool)
 	requiredJSONKeys := []string{"apikey", "gid", "lat", "lng", "createdAt"}
 	for file := range gct.Inchan {
@@ -67,7 +68,7 @@ func (gct GeoLocCalcTask) Task() {
 				continue
 			}
 
-			err = gct.OutputToWriter(parsedMap, store)
+			err = gct.OutputToWriter(parsedMap, store, indexKey)
 			if err != nil {
 				errorCount++
 			}
@@ -143,14 +144,14 @@ func valToString(v interface{}) string {
 }
 
 //OutputToWriter outputs the filled GeoLocOutput struct to the writer
-func (gct GeoLocCalcTask) OutputToWriter(vars map[string]string, store geostore.GeoLocationStore) error {
+func (gct GeoLocCalcTask) OutputToWriter(vars map[string]string, store geostore.GeoLocationStore, indexKey string) error {
 	var lat = vars["lat"]
 	var lng = vars["lng"]
 	var apik = vars["apikey"]
 	var cat = vars["createdAt"]
 	var gid = vars["gid"]
 	radius, _ := strconv.Atoi(gct.Cfg.Radius)
-	nearbyStores, err := store.NearbyWithDist(RedisGeoIndexName, lat, lng, gct.Cfg.Radius)
+	nearbyStores, err := store.NearbyWithDist(indexKey, lat, lng, gct.Cfg.Radius)
 	if err != nil {
 		log.Errorf("Error Redis nearby-query: %s", err)
 		return err

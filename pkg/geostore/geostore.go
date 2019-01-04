@@ -27,6 +27,8 @@ const (
 	MI
 )
 
+const redisPipelineSize int = 1000
+
 // QueryOptions for nearby queries
 type QueryOptions struct {
 	WithCoords    bool
@@ -62,5 +64,5 @@ type GeoLocationStore interface {
 
 // NewGeoLocationStore  ctor
 func NewGeoLocationStore(pool *radix.Pool) GeoLocationStore {
-	return &redisLocationStore{pool}
+	return &redisLocationStore{pool, redisPipelineSize}
 }

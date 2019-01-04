@@ -9,7 +9,8 @@ import (
 var defaultOpts = []string{"m", "WITHDIST", "COUNT", "100", "ASC"}
 
 type redisLocationStore struct {
-	p *radix.Pool
+	p      *radix.Pool
+	pipeSz int
 }
 
 func (rs *redisLocationStore) AddOrUpdateLocations(idx string, locs ...string) (int64, error) {
@@ -44,14 +45,3 @@ func (rs *redisLocationStore) NearbyWithDist(idx string,
 	}
 	return ret, err
 }
-
-/*
-func (rs *redisLocationStore) MultiNearbyWithDist(reqs []GeoRadiusRequest) ([][]GeoRadiusDistInfo, error) {
-	if len(reqs) == 0 {
-		return nil, nil
-	}
-	ret := make([][]GeoRadiusDistInfo, len(reqs))
-	//Initialze the inner slice
-
-}
-*/

@@ -11,9 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//RedisGeoIndexName the index key in redis where the cache is stored
-const RedisGeoIndexName = "store:locations"
-
 //Cache holds reverse index maps for reverse lookup
 type Cache struct {
 	APIKeyMap map[string]int
@@ -26,12 +23,22 @@ type Cache struct {
 
 //MakeCache a utility function that populates the cache
 func MakeCache(db *sqlx.DB, redisPool *radix.Pool, cfg *Config) (*Cache, error) {
-	log.Debugln("Populating redis geo cache")
 	/* Get the Table Names from config */
 	dbTabName := cfg.Db[CfgKey(cfg, "mysql")].Tables
-	err := populateRedisGeoData(db, redisPool, dbTabName)
+	/* Get the index name to populate */
+	indexKey := cfg.RedisCacheKey
+	var existsKey int
+	err := redisPool.Do(radix.Cmd(&existsKey, "EXISTS", indexKey))
 	if nil != err {
 		return nil, err
+	}
+	if existsKey == 0 {
+		log.Infof("Key %s does not exist populating redis", indexKey)
+		err := populateRedisGeoData(db, redisPool, dbTabName, indexKey)
+		if nil != err {
+			return nil, err
+		}
+		log.Debugf("Done populating redis geo cache, populating in memory caches")
 	}
 
 	/* Populate Caches */
@@ -64,19 +71,25 @@ func mkGeoStoreQuery(qp DbTableName) (string, error) {
 
 // Reads store data from mysql and creates a geo index in redis
 // TODO: Create a Batch Uploader to save RTT
-func populateRedisGeoData(db *sqlx.DB, rp *radix.Pool, dbt DbTableName) error {
-	const redisGeoIndexName = RedisGeoIndexName
+func populateRedisGeoData(db *sqlx.DB, rp *radix.Pool, dbt DbTableName, indexName string) error {
 	query, err := mkGeoStoreQuery(dbt)
 	if err != nil {
 		return err
 	}
+	log.Infoln("Querying DB for stores...")
 	rows, err := db.Query(query)
 	if nil != err {
 		return err
 	}
+	log.Infoln("stores query completed")
 	defer rows.Close()
 	redisStore := geostore.NewGeoLocationStore(rp)
-	results := make([]string, 45000)
+	//Instead of making a roundtrip to redis for adding each location
+	//We batch up 1000 locations and add them at once
+	const count = 1000
+	const batchSize = count * 3
+	var locs = make([]string, 0, batchSize)
+	var i = 0
 	for rows.Next() {
 		var id, lat, lng string
 		err = rows.Scan(&id, &lat, &lng)
@@ -84,11 +97,25 @@ func populateRedisGeoData(db *sqlx.DB, rp *radix.Pool, dbt DbTableName) error {
 			log.Errorf("Row scan error:%s\n", err)
 			return err
 		}
-		results = append(results, lng, lat, id)
-		_, err = redisStore.AddOrUpdateLocations(redisGeoIndexName, lng, lat, id)
-		if nil != err {
-			log.Errorf("Redis store error [id:%s,lng:%s,lat:%s] :%s\n", id, lng, lat, err)
+		if i < count {
+			locs = append(locs, lng, lat, id)
+			i++
+			continue
 		}
+		_, err = redisStore.AddOrUpdateLocations(indexName, locs...)
+		if nil != err {
+			log.Errorf("Redis store error : %s\n", err)
+		}
+		//reset the slice for the next round
+		i = 0
+		locs = locs[:0]
+		locs = append(locs, lng, lat, id)
+		i++
+	}
+	//Add Any remaining to redis
+	_, err = redisStore.AddOrUpdateLocations(indexName, locs...)
+	if nil != err {
+		log.Errorf("Redis store error : %s\n", err)
 	}
 	return nil
 }
@@ -225,7 +252,7 @@ func mkLocCache(db *sqlx.DB, catm, scatm, cm map[string]int,
 		return nil
 	}
 	defer rows.Close()
-	ret := make(map[string]GeoLocOutput, 45000)
+	ret := make(map[string]GeoLocOutput, 50000)
 
 	for rows.Next() {
 		var uuid, pincode int

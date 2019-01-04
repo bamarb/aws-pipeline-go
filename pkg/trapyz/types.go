@@ -61,15 +61,16 @@ type AwsS3Info struct {
 
 // Config config struct decoded from toml
 type Config struct {
-	Version       string
-	Radius        string
-	Nworkers      int
-	Inputdir      string
-	Schedule      string
-	TpzEnv        string `toml:"tpz_env"`
-	NumRecords    int    `toml:"num_records"`
-	RedisCacheKey string `toml:"redis_cache_key"`
-	Output        OutputInfo
-	Db            map[string]Database
-	Aws           map[string]AwsS3Info
+	Version              string
+	Radius               string
+	Nworkers             int
+	Inputdir             string
+	Schedule             string
+	TpzEnv               string `toml:"tpz_env"`
+	NumRecords           int    `toml:"num_records"`
+	RedisCacheKey        string `toml:"redis_cache_key"`
+	RedisRebuildCacheKey string `toml:"redis_rebuild_cache_key"`
+	Output               OutputInfo
+	Db                   map[string]Database
+	Aws                  map[string]AwsS3Info
 }
