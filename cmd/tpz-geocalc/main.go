@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mediocregopher/radix.v3"
+	radix "github.com/mediocregopher/radix.v3"
 
 	"github.com/bamarb/aws-pipeline-go/pkg/trapyz"
 
@@ -84,8 +84,6 @@ func runPipeline(ctx context.Context, config *trapyz.Config) {
 	//log.Debugf("SQL Conn str [%s]\n", sqlConnStr)
 	db := connMgr.MustConnectMysql()
 	redisPool := connMgr.MustConnectRedis()
-	/* Flush All */
-	redisPool.Do(radix.Cmd(nil, "FLUSHALL"))
 	/* Rebuild Cache */
 	log.Infoln("Rebuilding Redis store and in memory caches")
 	cache, err := trapyz.MakeCache(db, redisPool, config)
