@@ -143,6 +143,13 @@ func valToString(v interface{}) string {
 
 }
 
+func validateGeoLoc(geoloc *GeoLocOutput) bool {
+	if geoloc.City == "" || geoloc.Pin == "" || geoloc.Cat == "" || geoloc.Subcat == "" {
+		return false
+	}
+	return true
+}
+
 //OutputToWriter outputs the filled GeoLocOutput struct to the writer
 func (gct GeoLocCalcTask) OutputToWriter(vars map[string]string, store geostore.GeoLocationStore, indexKey string) error {
 	var lat = vars["lat"]
@@ -178,7 +185,9 @@ func (gct GeoLocCalcTask) OutputToWriter(vars map[string]string, store geostore.
 				Distance:  distRounded,
 				Createdat: cat,
 			}
-			gct.Outchan <- out
+			if validateGeoLoc(&out) {
+				gct.Outchan <- out
+			}
 		}
 	}
 	return nil

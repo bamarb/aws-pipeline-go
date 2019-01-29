@@ -246,6 +246,7 @@ func mkLocCache(db *sqlx.DB, catm, scatm, cm map[string]int,
 		log.Errorf("Making query failed: %s", err)
 		return nil
 	}
+	log.Infof("LocCache query:[%s] ", q)
 	rows, err := db.Queryx(q)
 	if err != nil {
 		log.Errorf("mkLocCache query failed: %s", err)
@@ -272,8 +273,12 @@ func mkLocCache(db *sqlx.DB, catm, scatm, cm map[string]int,
 		cityid = strconv.Itoa(cm[city])
 		pinid = strconv.Itoa(pm[pincode])
 		if catid == "0" || catid == "" || subcatid == "0" || subcatid == "" {
-			log.Errorf("ERROR: catid:[%s] subcatid:[%s] catname:[%s] subcatname:[%s]",
-				catid, subcatid, cat, subcat)
+			log.Errorf("CAT-ERROR: uuid:[%s], sname:[%s] catid:[%s] subcatid:[%s] catname:[%s] subcatname:[%s]",
+				uuidstr, sname, catid, subcatid, cat, subcat)
+		}
+		if cityid == "0" || cityid == "" || pinid == "0" || pinid == "" {
+			log.Errorf("CITY-ERROR: uuid:[%s] sname:[%s] cityid:[%s] pinid:[%s] city-name:[%s] pin-name:[%d]",
+				uuidstr, sname, cityid, pinid, city, pincode)
 		}
 		ret[uuidstr] = GeoLocOutput{UID: uuidstr, Pin: pinid, Sname: sname, Cat: catid, Subcat: subcatid, City: cityid}
 	}
